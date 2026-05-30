@@ -162,10 +162,8 @@ h1 {
 .workspace {
   width: 100%;
   min-height: 0;
-  display: grid;
-  grid-template-columns: minmax(250px, 320px) minmax(520px, 1fr) minmax(280px, 360px);
-  grid-auto-rows: auto;
-  grid-auto-flow: row;
+  display: flex;
+  flex-wrap: nowrap;
   align-items: start;
   gap: 18px;
   padding: 18px;
@@ -176,11 +174,12 @@ h1 {
 .replay-stage {
   width: 100%;
   align-self: start;
-  height: fit-content;
+  height: auto;
   border: 1px solid rgba(34, 31, 26, 0.12);
   border-radius: 8px;
   background: rgba(255, 252, 245, 0.92);
   box-shadow: var(--shadow);
+  contain: layout paint;
 }
 
 .panel {
@@ -192,8 +191,25 @@ h1 {
 
 .log-panel,
 .timeline-panel {
-  max-height: calc(100vh - 112px);
+  max-height: min(720px, calc(100vh - 112px));
   overflow: hidden;
+}
+
+.log-panel {
+  flex: 0 1 320px;
+  min-width: 250px;
+}
+
+.replay-stage {
+  flex: 1 1 560px;
+  min-width: 520px;
+  max-height: none;
+  overflow: visible;
+}
+
+.timeline-panel {
+  flex: 0 1 360px;
+  min-width: 280px;
 }
 
 .panel-heading {
@@ -320,7 +336,7 @@ h2 {
 
 .table-wrap {
   min-height: 0;
-  height: clamp(370px, 26vw, 390px);
+  height: clamp(330px, 24vw, 370px);
   padding: 14px;
 }
 
@@ -591,27 +607,31 @@ h2 {
 .trick-cards .card {
   width: 50px;
   border-color: rgba(255, 250, 240, 0.98);
-  background: linear-gradient(160deg, #fffefb, #fff7e9);
+  color: var(--card-ink);
+  background-color: #fffdf7;
+  background-image: linear-gradient(160deg, #fffffb 0%, #fff9ef 58%, #f4dec2 100%);
   box-shadow: 0 10px 22px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(34, 31, 26, 0.12);
 }
 
 .trick-cards .card:not(.card-ghost) {
-  --card-ink: #15171b;
-  --card-suit: #15171b;
+  --card-ink: #111318;
+  --card-suit: #111318;
 }
 
 .trick-cards .card-red:not(.card-ghost) {
-  --card-ink: #7f111c;
-  --card-suit: #a21421;
+  --card-ink: #86101d;
+  --card-suit: #b31928;
 }
 
 .trick-cards .card:not(.card-ghost) .card-rank,
 .trick-cards .card:not(.card-ghost) .card-foot {
   color: var(--card-ink);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.86);
 }
 
 .trick-cards .card:not(.card-ghost) .card-suit {
   color: var(--card-suit);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.86);
 }
 
 .trick-cards .card-ghost {
@@ -801,15 +821,21 @@ h2 {
 
 @media (max-width: 1180px) {
   .workspace {
-    grid-template-columns: minmax(240px, 300px) minmax(480px, 1fr);
+    flex-wrap: wrap;
+  }
+
+  .log-panel {
+    flex: 0 1 300px;
   }
 
   .replay-stage {
-    min-height: 0;
+    flex: 1 1 480px;
+    min-width: 480px;
   }
 
   .timeline-panel {
-    grid-column: 1 / -1;
+    flex: 1 1 100%;
+    min-width: 0;
   }
 
   .event-list {
@@ -833,11 +859,13 @@ h2 {
   }
 
   .workspace {
-    grid-template-columns: 1fr;
+    flex-direction: column;
     padding: 12px;
   }
 
+  .panel,
   .replay-stage {
+    min-width: 0;
     min-height: 0;
   }
 
@@ -852,7 +880,7 @@ h2 {
   }
 
   .table-wrap {
-    height: clamp(350px, 48vw, 380px);
+    height: clamp(300px, 42vw, 340px);
     min-height: 0;
     padding: 10px;
   }
@@ -930,7 +958,7 @@ h2 {
 
 @media (max-width: 820px) {
   .table-wrap {
-    height: clamp(350px, 48vw, 380px);
+    height: clamp(300px, 42vw, 340px);
     min-height: 0;
   }
 
@@ -1047,7 +1075,7 @@ h2 {
 
 @media (max-width: 560px) {
   .table-wrap {
-    height: clamp(420px, 112vw, 470px);
+    height: clamp(330px, 92vw, 380px);
   }
 
   .felt-table {
