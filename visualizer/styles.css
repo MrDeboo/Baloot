@@ -164,6 +164,7 @@ h1 {
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(250px, 320px) minmax(520px, 1fr) minmax(280px, 360px);
+  grid-auto-rows: auto;
   align-items: start;
   gap: 18px;
   padding: 18px;
@@ -240,9 +241,8 @@ h2 {
 
 .replay-stage {
   min-width: 0;
-  min-height: clamp(600px, 76vh, 680px);
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto auto auto;
   overflow: hidden;
 }
 
@@ -311,12 +311,13 @@ h2 {
 
 .table-wrap {
   min-height: 0;
-  padding: 18px;
+  height: clamp(340px, 34vw, 480px);
+  padding: 14px;
 }
 
 .felt-table {
   position: relative;
-  min-height: 100%;
+  min-height: 0;
   height: 100%;
   border-radius: 8px;
   overflow: hidden;
@@ -481,6 +482,13 @@ h2 {
   gap: 8px;
 }
 
+.trick-cards .empty-state {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 8px;
+}
+
 .played-stack {
   display: grid;
   justify-items: center;
@@ -494,6 +502,7 @@ h2 {
 }
 
 .card {
+  --card-ink: var(--black-card);
   --card-suit: var(--black-card);
   width: 54px;
   aspect-ratio: 0.72;
@@ -502,7 +511,7 @@ h2 {
   padding: 6px;
   border: 1px solid rgba(34, 31, 26, 0.16);
   border-radius: 8px;
-  color: var(--black-card);
+  color: var(--card-ink);
   background: linear-gradient(160deg, #fffef8, #f4e6d1);
   box-shadow: 0 7px 18px rgba(0, 0, 0, 0.22);
   font-weight: 900;
@@ -515,12 +524,13 @@ h2 {
 }
 
 .card-red {
+  --card-ink: #9f242d;
   --card-suit: #c4292f;
-  color: var(--black-card);
+  color: var(--card-ink);
 }
 
 .card-rank {
-  color: var(--black-card);
+  color: var(--card-ink);
   font-size: 0.9rem;
   line-height: 1;
 }
@@ -531,6 +541,7 @@ h2 {
   color: var(--card-suit);
   font-size: 1.18rem;
   line-height: 1;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.75);
 }
 
 .card-small .card-rank,
@@ -541,8 +552,20 @@ h2 {
 .card-foot {
   justify-self: end;
   transform: rotate(180deg);
-  color: var(--black-card);
+  color: var(--card-ink);
   font-size: 0.8rem;
+}
+
+.trick-cards .card {
+  border-color: rgba(255, 250, 240, 0.96);
+  background: linear-gradient(160deg, #fffefa, #f8eddb);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(34, 31, 26, 0.12);
+}
+
+.trick-cards .card-ghost {
+  border-color: rgba(255, 250, 240, 0.32);
+  background: rgba(255, 250, 240, 0.08);
+  box-shadow: none;
 }
 
 .card-ghost {
@@ -735,12 +758,11 @@ h2 {
   }
 
   .replay-stage {
-    min-height: clamp(560px, 72vh, 640px);
+    min-height: 0;
   }
 
   .timeline-panel {
     grid-column: 1 / -1;
-    min-height: 360px;
   }
 
   .event-list {
@@ -773,16 +795,17 @@ h2 {
   }
 
   .score-strip {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(96px, 1fr) minmax(190px, 1.6fr) minmax(96px, 1fr);
+    gap: 10px;
   }
 
   .match-state {
-    grid-column: 1 / -1;
-    grid-row: 1;
+    grid-column: auto;
+    grid-row: auto;
   }
 
   .table-wrap {
-    height: clamp(436px, 54vw, 450px);
+    height: clamp(350px, 48vw, 380px);
     min-height: 0;
     padding: 10px;
   }
@@ -813,12 +836,13 @@ h2 {
   }
 
   .controls {
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: 42px 42px minmax(58px, auto) 42px 42px minmax(120px, 1fr) auto;
+    gap: 8px;
   }
 
   #stepRange,
   .speed-select {
-    grid-column: 1 / -1;
+    grid-column: auto;
   }
 }
 
@@ -832,8 +856,23 @@ h2 {
   }
 
   .score-strip {
+    grid-template-columns: 1fr 1fr;
     gap: 8px;
     padding: 10px;
+  }
+
+  .match-state {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .controls {
+    grid-template-columns: repeat(5, 1fr);
+  }
+
+  #stepRange,
+  .speed-select {
+    grid-column: 1 / -1;
   }
 
   .trick-cards {
@@ -844,7 +883,7 @@ h2 {
 
 @media (max-width: 820px) {
   .table-wrap {
-    height: clamp(436px, 54vw, 450px);
+    height: clamp(350px, 48vw, 380px);
     min-height: 0;
   }
 
@@ -897,8 +936,8 @@ h2 {
   }
 
   .trick-cards {
-    min-height: 94px;
-    gap: 5px;
+    min-height: 82px;
+    gap: 4px;
   }
 
   .played-stack {
@@ -930,13 +969,14 @@ h2 {
     min-width: 0;
     width: 100%;
     align-self: center;
+    gap: 5px;
   }
 
   .contract-panel {
     grid-template-columns: 1fr auto 1fr;
     justify-items: stretch;
     gap: 5px;
-    padding: 6px;
+    padding: 5px 6px;
     text-align: left;
   }
 
@@ -952,7 +992,7 @@ h2 {
 
 @media (max-width: 560px) {
   .table-wrap {
-    height: clamp(420px, 94vw, 440px);
+    height: clamp(340px, 86vw, 390px);
   }
 
   .contract-panel {
