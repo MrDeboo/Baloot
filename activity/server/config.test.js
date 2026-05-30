@@ -342,6 +342,7 @@ test("Activity client serves the vendored Discord SDK without external CDN impor
   assert.match(main, /\bEvents\b/);
   assert.match(main, /getInstanceConnectedParticipants/);
   assert.match(main, /ACTIVITY_INSTANCE_PARTICIPANTS_UPDATE/);
+  assert.match(main, /openInviteDialog/);
   assert.match(serverSource, /https:\/\/discord\.com\/api\/v10/);
   assert.doesNotMatch(serverSource, /https:\/\/discord\.com\/api\/(?!v10)/);
 

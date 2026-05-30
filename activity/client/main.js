@@ -36,6 +36,7 @@ const els = {
   roomStatus: document.querySelector("#roomStatus"),
   selfBadge: document.querySelector("#selfBadge"),
   lobbyStrip: document.querySelector("#lobbyStrip"),
+  inviteButton: document.querySelector("#inviteButton"),
   playerList: document.querySelector("#playerList"),
   spectatorList: document.querySelector("#spectatorList"),
   activityUsersPanel: document.querySelector("#activityUsersPanel"),
@@ -77,6 +78,7 @@ let discordEvents = null;
 let apiPrefix = "";
 let activityParticipants = [];
 let activityParticipantsReady = false;
+let inviteAvailable = false;
 
 function cardColor(card) {
   return card.endsWith("H") || card.endsWith("D") ? "red" : "black";
@@ -94,6 +96,12 @@ function cardHtml(card) {
 
 function setStatus(text) {
   els.roomStatus.textContent = text;
+}
+
+function syncInviteButton() {
+  const canInvite = inviteAvailable && (!snapshot || snapshot.status === "lobby" || snapshot.status === "starting");
+  els.inviteButton.classList.toggle("hidden", !canInvite);
+  els.inviteButton.disabled = !canInvite;
 }
 
 function escapeHtml(value) {
@@ -148,6 +156,8 @@ async function authenticate() {
   await discordSdk.ready();
   roomId = discordSdk.instanceId || roomId;
   apiPrefix = typeof config.proxyPrefix === "string" ? config.proxyPrefix : "";
+  inviteAvailable = typeof discordSdk.commands.openInviteDialog === "function";
+  syncInviteButton();
 
   const { code } = await discordSdk.commands.authorize({
     client_id: config.clientId,
@@ -414,6 +424,7 @@ function render() {
   renderPeople(els.playerList, snapshot.players, "No players yet");
   renderPeople(els.spectatorList, snapshot.spectators, "No spectators");
   renderActivityUsers();
+  syncInviteButton();
   renderSeats();
   if (
     selectedCard &&
@@ -491,6 +502,18 @@ els.actionForm.addEventListener("submit", async (event) => {
 
 els.buyCall.addEventListener("change", renderControls);
 els.trumpSuit.addEventListener("change", renderControls);
+els.inviteButton.addEventListener("click", async () => {
+  if (!discordSdk?.commands?.openInviteDialog) return;
+  els.inviteButton.disabled = true;
+  try {
+    await discordSdk.commands.openInviteDialog();
+    setStatus("Invite dialog opened");
+  } catch (error) {
+    setStatus(error?.message || "Could not open invite dialog");
+  } finally {
+    syncInviteButton();
+  }
+});
 
 authenticate()
   .then(connectEvents)

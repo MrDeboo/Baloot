@@ -127,6 +127,8 @@ are missing.
   to Discord Activity instance participant updates so the lobby can show the
   Discord users currently inside the same Activity instance alongside the
   backend-seated players and spectators.
+- In Discord channels that support invites, the Activity exposes Discord's
+  native invite dialog so a lobby can bring in the four users needed to start.
 - In production mode, `/api/token` verifies the authenticated user is present in
   the Discord Activity instance before issuing an Activity session.
 - Before spawning the engine, the backend rechecks that all four seated players
