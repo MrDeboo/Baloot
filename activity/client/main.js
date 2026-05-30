@@ -77,7 +77,13 @@ function cardColor(card) {
 }
 
 function cardHtml(card) {
-  return `<button class="card ${cardColor(card)}" type="button" data-card="${escapeHtml(card)}" aria-label="${escapeHtml(card)}">${escapeHtml(card)}</button>`;
+  const isTurn = snapshot?.self.role === "player" && snapshot.currentTurn?.actorId === snapshot.self.seat;
+  const legalCards = new Set(snapshot?.self.legalCards ?? []);
+  const enforceLegal = isTurn && snapshot.currentTurn?.kind === "PLAY_CARD" && legalCards.size > 0;
+  const legal = !enforceLegal || legalCards.has(card);
+  const stateClass = legal ? "" : " is-illegal";
+  const disabled = legal ? "" : " disabled";
+  return `<button class="card ${cardColor(card)}${stateClass}" type="button" data-card="${escapeHtml(card)}" aria-label="${escapeHtml(card)}"${disabled}>${escapeHtml(card)}</button>`;
 }
 
 function setStatus(text) {
@@ -270,15 +276,18 @@ function renderControls() {
   els.submitAction.disabled =
     !isPlayerTurn ||
     (snapshot.currentTurn.kind === "BUY_CALL" && (!els.buyCall.value || (requiresTrump && !els.trumpSuit.value))) ||
-    (snapshot.currentTurn.kind === "PLAY_CARD" && !selectedCard);
+    (snapshot.currentTurn.kind === "PLAY_CARD" &&
+      (!selectedCard ||
+        (snapshot.self.legalCards?.length > 0 && !snapshot.self.legalCards.includes(selectedCard))));
 
   if (snapshot.self.role !== "player") {
     els.handStatus.textContent = "You are spectating this Activity.";
   } else if (!snapshot.currentTurn) {
     els.handStatus.textContent = "Waiting for the engine.";
   } else if (isPlayerTurn) {
-    els.handStatus.textContent =
-      snapshot.currentTurn.kind === "BUY_CALL" ? "Your bid." : "Your play.";
+    els.handStatus.textContent = snapshot.currentTurn.kind === "BUY_CALL"
+      ? "Your bid."
+      : `Your play${snapshot.self.legalCards?.length ? ` - ${snapshot.self.legalCards.length} legal` : ""}.`;
   } else {
     els.handStatus.textContent = `Waiting for P${snapshot.currentTurn.actorId}.`;
   }
@@ -300,7 +309,13 @@ function render() {
   renderPeople(els.playerList, snapshot.players, "No players yet");
   renderPeople(els.spectatorList, snapshot.spectators, "No spectators");
   renderSeats();
-  if (selectedCard && !snapshot.self.hand.includes(selectedCard)) selectedCard = "";
+  if (
+    selectedCard &&
+    (!snapshot.self.hand.includes(selectedCard) ||
+      (snapshot.self.legalCards?.length > 0 && !snapshot.self.legalCards.includes(selectedCard)))
+  ) {
+    selectedCard = "";
+  }
 
   els.scoreA.textContent = snapshot.state.scores.A;
   els.scoreB.textContent = snapshot.state.scores.B;
@@ -321,7 +336,7 @@ function render() {
 
 els.handCards.addEventListener("click", (event) => {
   const card = event.target.closest("[data-card]");
-  if (!card) return;
+  if (!card || card.disabled) return;
   selectedCard = card.dataset.card;
   render();
 });

@@ -264,6 +264,12 @@ h2 {
   cursor: pointer;
 }
 
+.hand-cards .card.is-illegal {
+  cursor: not-allowed;
+  opacity: 0.36;
+  filter: grayscale(0.35);
+}
+
 .hand-cards .card.is-selected {
   border-color: var(--gold);
   box-shadow: 0 0 0 3px rgba(210, 155, 40, 0.28), 0 8px 20px rgba(0, 0, 0, 0.2);

@@ -14,6 +14,26 @@ const VALID_BUY_CALLS = new Set(BUY_CALLS);
 const VALID_SUITS = new Set(["C", "D", "H", "S"]);
 const VALID_PROJECTS = new Set(["SIRA", "FIFTY", "HUNDRED", "FOUR_HUNDRED"]);
 const CARD_PATTERN = /^(?:7|8|9|10|J|Q|K|A)[CDHS]$/;
+const SUN_STRENGTH = new Map([
+  ["A", 8],
+  ["10", 7],
+  ["K", 6],
+  ["Q", 5],
+  ["J", 4],
+  ["9", 3],
+  ["8", 2],
+  ["7", 1]
+]);
+const HUKUM_TRUMP_STRENGTH = new Map([
+  ["J", 8],
+  ["9", 7],
+  ["A", 6],
+  ["10", 5],
+  ["K", 4],
+  ["Q", 3],
+  ["8", 2],
+  ["7", 1]
+]);
 
 function uniqueId(prefix) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -37,6 +57,11 @@ function normalizeCard(value, field = "card") {
     throw new Error(`Invalid ${field}.`);
   }
   return card;
+}
+
+function cardParts(card) {
+  const code = normalizeCard(card);
+  return { code, rank: code.slice(0, -1), suit: code.slice(-1) };
 }
 
 function normalizeBuyCall(body) {
@@ -147,6 +172,9 @@ export class ActivityRoom extends EventEmitter {
     this.playersBySeat = new Map();
     this.publicActionKeys = new Set();
     this.currentTurn = null;
+    this.contractInfo = null;
+    this.pendingIkkahSeats = new Set();
+    this.projectClosedSeats = new Set();
     this.error = "";
     this.state = {
       matchId: "",
@@ -304,8 +332,16 @@ export class ActivityRoom extends EventEmitter {
       const hand = this.state.hands.get(participant.seat) ?? [];
       const card = normalizeCard(body.card, "PLAY_CARD card");
       requireCardsInHand([card], hand, "Played card");
+      const legalCards = this.legalCardsForSeat(participant.seat);
+      if (legalCards.length > 0 && !legalCards.includes(card)) {
+        throw new Error(`Played card ${card} is not legal now. Legal cards: ${legalCards.join(", ")}.`);
+      }
 
-      for (const project of normalizeProjects(body.projects, hand)) {
+      const projects = normalizeProjects(body.projects, hand);
+      if (projects.length > 0 && this.projectClosedSeats.has(participant.seat)) {
+        throw new Error("Projects must be declared before your first play.");
+      }
+      for (const project of projects) {
         actions.push({
           actor_id: participant.seat,
           type: "STATE_PROJECT",
@@ -374,6 +410,9 @@ export class ActivityRoom extends EventEmitter {
         this.state.contract = "";
         this.state.round = 0;
         this.state.trick = [];
+        this.contractInfo = null;
+        this.pendingIkkahSeats.clear();
+        this.projectClosedSeats.clear();
         this.state.log.push(`Game ${action.data.game} started`);
         break;
       case "MIDDLE_CARD":
@@ -381,6 +420,7 @@ export class ActivityRoom extends EventEmitter {
         this.state.log.push(`Middle card ${action.data.card}`);
         break;
       case "BUY_CALL":
+        this.updateContractFromBuy(action);
         this.state.contract = `${action.actor_id}: ${action.data.call}${action.data.trump ? ` ${action.data.trump}` : ""}`;
         this.state.log.push(`P${action.actor_id} called ${action.data.call}`);
         break;
@@ -398,11 +438,21 @@ export class ActivityRoom extends EventEmitter {
         if (this.state.trick.length >= 4 || this.state.trick.some((p) => p.round !== this.state.round)) {
           this.state.trick = [];
         }
-        this.state.trick.push({ player: action.actor_id, card: action.data.card, round: this.state.round });
+        this.state.trick.push({
+          player: action.actor_id,
+          card: action.data.card,
+          round: this.state.round,
+          ikkah: this.pendingIkkahSeats.has(action.actor_id)
+        });
+        this.pendingIkkahSeats.delete(action.actor_id);
+        this.projectClosedSeats.add(action.actor_id);
         this.state.log.push(`R${this.state.round} P${action.actor_id} played ${action.data.card}`);
         break;
       }
       case "IKKAH":
+        this.pendingIkkahSeats.add(action.actor_id);
+        this.state.log.push(`P${action.actor_id} declared ${action.type}`);
+        break;
       case "BALOOT":
         this.state.log.push(`P${action.actor_id} declared ${action.type}`);
         break;
@@ -410,6 +460,167 @@ export class ActivityRoom extends EventEmitter {
         break;
     }
     if (this.state.log.length > 80) this.state.log = this.state.log.slice(-80);
+  }
+
+  updateContractFromBuy(action) {
+    const call = normalizeToken(action.data.call);
+    if (call === "BAS") return;
+
+    const trump = normalizeToken(action.data.trump);
+    if (call === "ENFORCE_SUN" && this.contractInfo) {
+      this.contractInfo.mode = "SUN";
+      this.contractInfo.trump = "";
+      return;
+    }
+    if (call === "ENFORCE_HUKUM" && this.contractInfo) {
+      this.contractInfo.mode = "HUKUM";
+      this.contractInfo.trump = trump || this.contractInfo.trump || this.middleSuit();
+      return;
+    }
+    if (call === "GABLAK_SUN" || call === "GABLAK_ASHKAL") {
+      this.contractInfo = {
+        mode: "SUN",
+        trump: "",
+        buyerId: action.actor_id,
+        buyerTeam: this.teamOfSeat(action.actor_id),
+        sourceCall: call,
+        multiplier: 1,
+        closed: false
+      };
+      return;
+    }
+    if (call.startsWith("BET_") || call === "GAHWA") {
+      if (!this.contractInfo) return;
+      if (call === "BET_TRIPLE") this.contractInfo.multiplier = Math.max(this.contractInfo.multiplier, 3);
+      else if (call === "BET_QUADRUPLE") this.contractInfo.multiplier = Math.max(this.contractInfo.multiplier, 4);
+      else if (call !== "GAHWA") this.contractInfo.multiplier = Math.max(this.contractInfo.multiplier, 2);
+      this.contractInfo.closed = call === "BET_CLOSE";
+      return;
+    }
+    if (call === "SUN" || call === "ASHKAL" || call === "HUKUM") {
+      this.contractInfo = {
+        mode: call === "HUKUM" ? "HUKUM" : "SUN",
+        trump: call === "HUKUM" ? trump || this.middleSuit() : "",
+        buyerId: action.actor_id,
+        buyerTeam: this.teamOfSeat(action.actor_id),
+        sourceCall: call,
+        multiplier: 1,
+        closed: false
+      };
+    }
+  }
+
+  middleSuit() {
+    return this.state.middle ? this.state.middle.slice(-1) : "";
+  }
+
+  teamOfSeat(seat) {
+    if (seat === this.state.seats.initiator || seat === this.state.seats.cutter) return "A";
+    if (seat === this.state.seats.nitwit || seat === this.state.seats.dealer) return "B";
+    return seat % 2 === 1 ? "A" : "B";
+  }
+
+  activeTrickForTurn() {
+    if (this.currentTurn?.kind !== "PLAY_CARD") return [];
+    const round = Number(this.currentTurn.round || this.state.round);
+    if (!round || Number(this.state.round) !== round || this.state.trick.length >= 4) return [];
+    return this.state.trick.filter((play) => Number(play.round) === round);
+  }
+
+  legalCardsForSeat(seat) {
+    const hand = this.state.hands.get(seat) ?? [];
+    if (hand.length === 0) return [];
+    const contract = this.contractInfo;
+    if (!contract) return hand;
+
+    const plays = this.activeTrickForTurn();
+    if (plays.length === 0) {
+      if (
+        contract.mode === "HUKUM" &&
+        contract.closed &&
+        contract.trump &&
+        hand.some((card) => cardParts(card).suit !== contract.trump)
+      ) {
+        return hand.filter((card) => cardParts(card).suit !== contract.trump);
+      }
+      return hand;
+    }
+
+    const ledSuit = cardParts(plays[0].card).suit;
+    const follow = hand.filter((card) => cardParts(card).suit === ledSuit);
+    if (follow.length > 0) {
+      if (contract.mode === "HUKUM" && contract.trump && ledSuit === contract.trump) {
+        const winning = plays[this.winningPlayIndex(plays, contract)];
+        if (winning && this.teamOfSeat(winning.player) !== this.teamOfSeat(seat)) {
+          const higher = this.higherTrumpsThan(follow, winning.card, contract.trump);
+          if (higher.length > 0) return higher;
+        }
+      }
+      return follow;
+    }
+
+    if (contract.mode !== "HUKUM" || !contract.trump) return hand;
+
+    const trumps = hand.filter((card) => cardParts(card).suit === contract.trump);
+    if (trumps.length === 0) return hand;
+
+    const winning = plays[this.winningPlayIndex(plays, contract)];
+    const currentSideWinning = winning && this.teamOfSeat(winning.player) === this.teamOfSeat(seat);
+    const playerPosition = plays.length + 1;
+    if (currentSideWinning && playerPosition === 4) return hand;
+
+    const partnerIkkah = plays.some((play) => play.ikkah && this.teamOfSeat(play.player) === this.teamOfSeat(seat));
+    if (partnerIkkah) return hand;
+
+    if (winning && this.isTrump(winning.card, contract)) {
+      if (this.teamOfSeat(winning.player) !== this.teamOfSeat(seat)) {
+        const higher = this.higherTrumpsThan(trumps, winning.card, contract.trump);
+        if (higher.length > 0) return higher;
+        if (playerPosition === 3) return hand;
+      }
+    }
+
+    return trumps;
+  }
+
+  isTrump(card, contract) {
+    return contract.mode === "HUKUM" && contract.trump && cardParts(card).suit === contract.trump;
+  }
+
+  cardStrength(card, contract) {
+    const parsed = cardParts(card);
+    if (this.isTrump(card, contract)) return HUKUM_TRUMP_STRENGTH.get(parsed.rank) ?? 0;
+    return SUN_STRENGTH.get(parsed.rank) ?? 0;
+  }
+
+  higherTrumpsThan(cards, currentHigh, trump) {
+    const contract = { mode: "HUKUM", trump };
+    const current = this.cardStrength(currentHigh, contract);
+    return cards.filter((card) => cardParts(card).suit === trump && this.cardStrength(card, contract) > current);
+  }
+
+  cardBeats(challenger, current, ledSuit, contract) {
+    const challengerSuit = cardParts(challenger).suit;
+    const currentSuit = cardParts(current).suit;
+    const challengerTrump = this.isTrump(challenger, contract);
+    const currentTrump = this.isTrump(current, contract);
+    if (challengerTrump !== currentTrump) return challengerTrump;
+    if (challengerSuit !== currentSuit) {
+      if (challengerSuit === ledSuit) return true;
+      if (currentSuit === ledSuit) return false;
+      return false;
+    }
+    return this.cardStrength(challenger, contract) > this.cardStrength(current, contract);
+  }
+
+  winningPlayIndex(plays, contract) {
+    if (plays.length === 0) return -1;
+    const ledSuit = cardParts(plays[0].card).suit;
+    let winner = 0;
+    for (let index = 1; index < plays.length; index += 1) {
+      if (this.cardBeats(plays[index].card, plays[winner].card, ledSuit, contract)) winner = index;
+    }
+    return winner;
   }
 
   applyControl(message) {
@@ -460,6 +671,10 @@ export class ActivityRoom extends EventEmitter {
       .filter((p) => p.role === "spectator")
       .map((p) => publicUser(p.user, p));
     const seat = participant?.seat ?? null;
+    const legalCards =
+      seat && this.currentTurn?.kind === "PLAY_CARD" && this.currentTurn.actorId === seat
+        ? this.legalCardsForSeat(seat)
+        : [];
     return {
       roomId: this.id,
       status: this.status,
@@ -467,7 +682,8 @@ export class ActivityRoom extends EventEmitter {
       self: {
         role: participant?.role ?? "spectator",
         seat,
-        hand: seat ? this.state.hands.get(seat) ?? [] : []
+        hand: seat ? this.state.hands.get(seat) ?? [] : [],
+        legalCards
       },
       players,
       spectators,
