@@ -6,20 +6,76 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { EngineSeatConnection } from "./engine-client.js";
-import { TurnTracker } from "./turn-tracker.js";
+import { BUY_CALLS, TurnTracker } from "./turn-tracker.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../..");
+const VALID_BUY_CALLS = new Set(BUY_CALLS);
+const VALID_SUITS = new Set(["C", "D", "H", "S"]);
+const VALID_PROJECTS = new Set(["SIRA", "FIFTY", "HUNDRED", "FOUR_HUNDRED"]);
+const CARD_PATTERN = /^(?:7|8|9|10|J|Q|K|A)[CDHS]$/;
 
 function uniqueId(prefix) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function parseCards(text) {
-  return String(text || "")
+  const value = Array.isArray(text) ? text.join(",") : text;
+  return String(value || "")
     .split(/[,\s]+/)
     .map((card) => card.trim().toUpperCase())
     .filter(Boolean);
+}
+
+function normalizeToken(value) {
+  return String(value ?? "").trim().toUpperCase();
+}
+
+function normalizeCard(value, field = "card") {
+  const card = normalizeToken(value);
+  if (!CARD_PATTERN.test(card)) {
+    throw new Error(`Invalid ${field}.`);
+  }
+  return card;
+}
+
+function normalizeBuyCall(body) {
+  const call = normalizeToken(body.call);
+  if (!call) throw new Error("BUY_CALL requires a call.");
+  if (!VALID_BUY_CALLS.has(call)) throw new Error(`Unsupported BUY_CALL ${call}.`);
+
+  const trump = normalizeToken(body.trump);
+  if (trump && !VALID_SUITS.has(trump)) throw new Error("Invalid trump suit.");
+
+  const data = { call };
+  if (trump) data.trump = trump;
+  return data;
+}
+
+function requireCardsInHand(cards, hand, field) {
+  for (const card of cards) {
+    if (!hand.includes(card)) throw new Error(`${field} ${card} is not in your hand.`);
+  }
+}
+
+function normalizeProjects(value, hand) {
+  if (value == null) return [];
+  if (!Array.isArray(value)) throw new Error("projects must be an array.");
+
+  return value.map((project, index) => {
+    if (!project || typeof project !== "object") {
+      throw new Error(`Project ${index + 1} must be an object.`);
+    }
+
+    const kind = normalizeToken(project.project);
+    if (!VALID_PROJECTS.has(kind)) throw new Error(`Unsupported project ${kind || "(blank)"}.`);
+
+    const cards = parseCards(project.cards).map((card) => normalizeCard(card, "project card"));
+    if (cards.length === 0) throw new Error(`Project ${kind} requires cards.`);
+    requireCardsInHand(cards, hand, "Project card");
+
+    return { project: kind, cards: cards.join(",") };
+  });
 }
 
 function defaultEngineBinary() {
@@ -236,34 +292,39 @@ export class ActivityRoom extends EventEmitter {
       throw new Error("It is not your turn.");
     }
 
+    const kind = normalizeToken(body.kind);
+    if (kind !== this.currentTurn.kind) {
+      throw new Error(`Expected ${this.currentTurn.kind} action.`);
+    }
+
     const actions = [];
-    if (body.kind === "BUY_CALL") {
-      const data = { call: String(body.call || "BAS").toUpperCase() };
-      if (body.trump) data.trump = String(body.trump).toUpperCase();
-      actions.push({ actor_id: participant.seat, type: "BUY_CALL", data });
-    } else if (body.kind === "PLAY_CARD") {
-      for (const project of body.projects ?? []) {
-        if (project.project && project.cards) {
-          actions.push({
-            actor_id: participant.seat,
-            type: "STATE_PROJECT",
-            data: { project: String(project.project).toUpperCase(), cards: String(project.cards).toUpperCase() }
-          });
-        }
+    if (kind === "BUY_CALL") {
+      actions.push({ actor_id: participant.seat, type: "BUY_CALL", data: normalizeBuyCall(body) });
+    } else if (kind === "PLAY_CARD") {
+      const hand = this.state.hands.get(participant.seat) ?? [];
+      const card = normalizeCard(body.card, "PLAY_CARD card");
+      requireCardsInHand([card], hand, "Played card");
+
+      for (const project of normalizeProjects(body.projects, hand)) {
+        actions.push({
+          actor_id: participant.seat,
+          type: "STATE_PROJECT",
+          data: project
+        });
       }
       if (body.ikkah) actions.push({ actor_id: participant.seat, type: "IKKAH", data: {} });
       if (body.baloot) actions.push({ actor_id: participant.seat, type: "BALOOT", data: {} });
       actions.push({
         actor_id: participant.seat,
         type: "PLAY_CARD",
-        data: { card: String(body.card || "").toUpperCase() }
+        data: { card }
       });
     } else {
       throw new Error("Unsupported action kind.");
     }
 
-    this.currentTurn = null;
     this.engine.sendActions(participant.seat, actions);
+    this.currentTurn = null;
     this.broadcast();
   }
 

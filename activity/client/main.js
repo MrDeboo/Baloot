@@ -1,4 +1,37 @@
 const qs = new URLSearchParams(location.search);
+const BUY_LABELS = {
+  BAS: "Bas",
+  SUN: "Sun",
+  HUKUM: "Hukum",
+  ASHKAL: "Ashkal",
+  GABLAK_SUN: "Gablak Sun",
+  GABLAK_ASHKAL: "Gablak Ashkal",
+  BET_OPEN: "Bet Open",
+  BET_CLOSE: "Bet Close",
+  BET_DOUBLE: "Double",
+  BET_TRIPLE: "Triple",
+  BET_QUADRUPLE: "Quadruple",
+  GAHWA: "Gahwa",
+  ENFORCE_SUN: "Enforce Sun",
+  ENFORCE_HUKUM: "Enforce Hukum"
+};
+const BUY_OPTIONS_BY_PHASE = {
+  1: ["BAS", "HUKUM", "SUN", "ASHKAL"],
+  2: ["BAS", "HUKUM", "SUN"],
+  discussion: [
+    "BAS",
+    "GABLAK_SUN",
+    "GABLAK_ASHKAL",
+    "BET_OPEN",
+    "BET_CLOSE",
+    "BET_DOUBLE",
+    "BET_TRIPLE",
+    "BET_QUADRUPLE",
+    "GAHWA"
+  ],
+  enforce: ["BAS", "ENFORCE_SUN", "ENFORCE_HUKUM"]
+};
+
 const els = {
   roomStatus: document.querySelector("#roomStatus"),
   selfBadge: document.querySelector("#selfBadge"),
@@ -176,13 +209,67 @@ function renderSeats() {
   }
 }
 
+function canCallAshkal() {
+  const seat = snapshot?.self.seat;
+  const seats = snapshot?.state.seats ?? {};
+  if (!seat) return false;
+  if (seats.cutter || seats.dealer) return seat === seats.cutter || seat === seats.dealer;
+  return seat === 3 || seat === 4;
+}
+
+function middleSuit() {
+  const middle = snapshot?.state.middle || "";
+  return middle.slice(-1);
+}
+
+function setOptions(select, values, labels = BUY_LABELS) {
+  const current = select.value;
+  select.innerHTML = values
+    .map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(labels[value] || value)}</option>`)
+    .join("");
+  select.value = values.includes(current) ? current : values[0] || "";
+}
+
+function allowedBuyOptions() {
+  const phase = String(snapshot?.currentTurn?.phase || "1");
+  const options = BUY_OPTIONS_BY_PHASE[phase] ?? BUY_OPTIONS_BY_PHASE.discussion;
+  return options.filter((option) => !option.includes("ASHKAL") || canCallAshkal());
+}
+
+function syncBuyControls() {
+  if (snapshot?.currentTurn?.kind !== "BUY_CALL") return;
+
+  setOptions(els.buyCall, allowedBuyOptions());
+  const call = els.buyCall.value;
+  const phase = String(snapshot.currentTurn.phase || "1");
+  const needsTrump = call === "HUKUM" && phase === "2";
+  const canChooseTrump = needsTrump || call === "ENFORCE_HUKUM";
+  const suits = ["C", "D", "H", "S"].filter((suit) => !(needsTrump && suit === middleSuit()));
+  const currentTrump = els.trumpSuit.value;
+
+  els.trumpSuit.disabled = !canChooseTrump;
+  els.trumpSuit.innerHTML = [
+    `<option value="">${needsTrump ? "Choose trump" : "No trump"}</option>`,
+    ...suits.map((suit) => `<option value="${suit}">${{ C: "Clubs", D: "Diamonds", H: "Hearts", S: "Spades" }[suit]}</option>`)
+  ].join("");
+  els.trumpSuit.value = canChooseTrump && (currentTrump === "" || suits.includes(currentTrump)) ? currentTrump : "";
+}
+
 function renderControls() {
   const isPlayerTurn =
     snapshot.self.role === "player" && snapshot.currentTurn?.actorId === snapshot.self.seat;
   els.buyControls.classList.toggle("hidden", !(isPlayerTurn && snapshot.currentTurn.kind === "BUY_CALL"));
   els.playControls.classList.toggle("hidden", !(isPlayerTurn && snapshot.currentTurn.kind === "PLAY_CARD"));
+  if (isPlayerTurn && snapshot.currentTurn.kind === "BUY_CALL") syncBuyControls();
+
+  const requiresTrump =
+    isPlayerTurn &&
+    snapshot.currentTurn.kind === "BUY_CALL" &&
+    els.buyCall.value === "HUKUM" &&
+    String(snapshot.currentTurn.phase || "1") === "2";
   els.submitAction.disabled =
     !isPlayerTurn ||
+    (snapshot.currentTurn.kind === "BUY_CALL" && (!els.buyCall.value || (requiresTrump && !els.trumpSuit.value))) ||
     (snapshot.currentTurn.kind === "PLAY_CARD" && !selectedCard);
 
   if (snapshot.self.role !== "player") {
@@ -213,6 +300,7 @@ function render() {
   renderPeople(els.playerList, snapshot.players, "No players yet");
   renderPeople(els.spectatorList, snapshot.spectators, "No spectators");
   renderSeats();
+  if (selectedCard && !snapshot.self.hand.includes(selectedCard)) selectedCard = "";
 
   els.scoreA.textContent = snapshot.state.scores.A;
   els.scoreB.textContent = snapshot.state.scores.B;
@@ -270,9 +358,18 @@ els.actionForm.addEventListener("submit", async (event) => {
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: "Action failed" }));
     setStatus(error.error);
+  } else {
+    setStatus("Action sent");
   }
   selectedCard = "";
+  els.ikkahFlag.checked = false;
+  els.balootFlag.checked = false;
+  els.projectKind.value = "";
+  els.projectCards.value = "";
 });
+
+els.buyCall.addEventListener("change", renderControls);
+els.trumpSuit.addEventListener("change", renderControls);
 
 authenticate()
   .then(connectEvents)
