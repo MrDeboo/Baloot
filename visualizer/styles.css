@@ -162,10 +162,8 @@ h1 {
 .workspace {
   width: 100%;
   min-height: 0;
-  display: grid;
-  grid-template-columns: minmax(250px, 320px) minmax(0, 1fr) minmax(280px, 360px);
-  align-items: start;
-  align-content: start;
+  display: flex;
+  align-items: flex-start;
   gap: 18px;
   padding: 18px;
   flex: 1;
@@ -175,7 +173,7 @@ h1 {
 .replay-stage {
   width: 100%;
   align-self: start;
-  height: fit-content;
+  height: auto;
   border: 1px solid rgba(34, 31, 26, 0.12);
   border-radius: 8px;
   background: rgba(255, 252, 245, 0.92);
@@ -196,17 +194,22 @@ h1 {
 }
 
 .log-panel {
+  flex: 0 0 min(320px, 100%);
   min-width: 0;
+  max-width: 320px;
 }
 
 .replay-stage {
+  flex: 1 1 560px;
   min-width: 0;
   max-height: none;
   overflow: visible;
 }
 
 .timeline-panel {
+  flex: 0 0 min(360px, 100%);
   min-width: 0;
+  max-width: 360px;
 }
 
 .panel-heading {
@@ -264,7 +267,7 @@ h2 {
 .replay-stage {
   min-width: 0;
   display: grid;
-  grid-template-rows: auto auto auto;
+  grid-template-rows: auto max-content auto;
   overflow: hidden;
 }
 
@@ -604,25 +607,25 @@ h2 {
 .trick-cards .card {
   width: 48px;
   border-color: rgba(255, 250, 240, 0.98);
-  color: #151515;
+  color: #16110f;
   background-color: #fffdf7;
   background-image: linear-gradient(160deg, #fffffb 0%, #fff9ef 58%, #f4dec2 100%);
   box-shadow: 0 10px 22px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(34, 31, 26, 0.12);
 }
 
 .trick-cards .card:not(.card-ghost) {
-  --card-ink: #151515;
-  --card-suit: #151515;
+  --card-ink: #16110f;
+  --card-suit: #16110f;
 }
 
 .trick-cards .card-red:not(.card-ghost) {
-  --card-ink: #151515;
+  --card-ink: #16110f;
   --card-suit: #b31928;
 }
 
 .trick-cards .card:not(.card-ghost) .card-rank,
 .trick-cards .card:not(.card-ghost) .card-foot {
-  color: #151515;
+  color: #16110f;
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.86);
 }
 
@@ -816,13 +819,22 @@ h2 {
   font-weight: 800;
 }
 
-@media (max-width: 1180px) {
+@media (max-width: 1280px) {
   .workspace {
-    grid-template-columns: minmax(250px, 320px) minmax(0, 1fr);
+    flex-wrap: wrap;
+  }
+
+  .log-panel {
+    flex: 0 0 min(320px, 100%);
+  }
+
+  .replay-stage {
+    flex: 1 1 480px;
   }
 
   .timeline-panel {
-    grid-column: 1 / -1;
+    flex: 1 1 100%;
+    max-width: none;
   }
 
   .event-list {
@@ -846,14 +858,17 @@ h2 {
   }
 
   .workspace {
-    grid-template-columns: 1fr;
+    flex-direction: column;
+    flex-wrap: nowrap;
     padding: 12px;
   }
 
   .panel,
   .replay-stage {
+    flex: 0 0 auto;
     min-width: 0;
     min-height: 0;
+    max-width: none;
   }
 
   .score-strip {
