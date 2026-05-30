@@ -163,6 +163,8 @@ are missing.
   during a match, default `10000`. If the player does not reconnect before the
   grace expires, the Activity closes that player's engine proxy seat and the
   engine resolves the match as a forfeit. No bot action is generated.
+- `ACTIVITY_SSE_HEARTBEAT_MS`: interval for SSE keepalive comments sent to
+  connected Activity clients, default `25000`. Set `0` to disable.
 - `ACTIVITY_ASSET_VERSION`: optional cache-busting value injected into
   `main.js` and `styles.css` URLs. If omitted, the backend generates a new value
   when it starts.

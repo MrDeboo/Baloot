@@ -175,6 +175,7 @@ export class ActivityHub {
       targetScore: Number(options.targetScore ?? process.env.BALOOT_TARGET_SCORE ?? 152),
       readTimeoutMs: Number(options.readTimeoutMs ?? process.env.BALOOT_READ_TIMEOUT_MS ?? 900000),
       disconnectGraceMs: Number(options.disconnectGraceMs ?? process.env.ACTIVITY_DISCONNECT_GRACE_MS ?? 10000),
+      sseHeartbeatMs: Number(options.sseHeartbeatMs ?? process.env.ACTIVITY_SSE_HEARTBEAT_MS ?? 25000),
       verifyPlayersReady: options.verifyPlayersReady
     };
     this.rooms = new Map();
@@ -232,7 +233,7 @@ export class ActivityRoom extends EventEmitter {
 
   connect({ user, response }) {
     const participant = this.ensureParticipant(user);
-    const client = { id: uniqueId("sse"), userId: user.id, response };
+    const client = { id: uniqueId("sse"), userId: user.id, response, heartbeatTimer: null };
     this.clients.add(client);
 
     response.writeHead(200, {
@@ -242,9 +243,11 @@ export class ActivityRoom extends EventEmitter {
       "X-Accel-Buffering": "no"
     });
     response.write("\n");
+    this.startHeartbeat(client);
     this.sendTo(client, "snapshot", this.snapshotFor(user.id));
 
     response.on("close", () => {
+      this.stopHeartbeat(client);
       this.clients.delete(client);
       this.markDisconnected(user.id);
       this.broadcast();
@@ -252,6 +255,26 @@ export class ActivityRoom extends EventEmitter {
 
     this.maybeStart();
     return participant;
+  }
+
+  startHeartbeat(client) {
+    const intervalMs = Number(this.options.sseHeartbeatMs ?? 25000);
+    if (!Number.isFinite(intervalMs) || intervalMs <= 0) return;
+    client.heartbeatTimer = setInterval(() => {
+      try {
+        client.response.write(": keepalive\n\n");
+      } catch {
+        this.stopHeartbeat(client);
+        this.clients.delete(client);
+      }
+    }, intervalMs);
+    client.heartbeatTimer.unref?.();
+  }
+
+  stopHeartbeat(client) {
+    if (!client.heartbeatTimer) return;
+    clearInterval(client.heartbeatTimer);
+    client.heartbeatTimer = null;
   }
 
   ensureParticipant(user) {
@@ -1035,6 +1058,7 @@ export class ActivityRoom extends EventEmitter {
     this.closed = true;
     this.clearDisconnectTimers();
     for (const client of this.clients) {
+      this.stopHeartbeat(client);
       client.response.end?.();
     }
     this.clients.clear();

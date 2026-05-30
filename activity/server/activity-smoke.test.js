@@ -21,6 +21,7 @@ class MockSseResponse extends EventEmitter {
     super();
     this.buffer = "";
     this.snapshots = [];
+    this.heartbeats = 0;
     this.headers = null;
   }
 
@@ -35,6 +36,9 @@ class MockSseResponse extends EventEmitter {
     while (boundary !== -1) {
       const block = this.buffer.slice(0, boundary);
       this.buffer = this.buffer.slice(boundary + 2);
+      if (block.startsWith(":")) {
+        this.heartbeats += 1;
+      }
       const event = block.split("\n").find((line) => line.startsWith("event: "))?.slice(7);
       const data = block.split("\n").find((line) => line.startsWith("data: "))?.slice(6);
       if (event === "snapshot" && data) {
@@ -125,6 +129,24 @@ async function driveHumanSubmittedMatch(room, responses) {
     throw new Error(`Unsupported Activity turn kind ${turn.kind}.`);
   }
 }
+
+test("Activity room keeps SSE streams warm with comment heartbeats", async () => {
+  const hub = new ActivityHub({ engineBin: "/missing-baloot-server", sseHeartbeatMs: 5 });
+  const room = hub.getRoom(`heartbeat-${Date.now()}`);
+
+  try {
+    const response = connect(room, "player-1");
+    await waitFor(() => response.heartbeats > 0, 500);
+
+    response.end();
+    const finalHeartbeats = response.heartbeats;
+    await sleep(25);
+
+    assert.equal(response.heartbeats, finalHeartbeats);
+  } finally {
+    hub.closeAll();
+  }
+});
 
 test("Activity starts only with four players and makes extras spectators", { skip: !engineBin }, async () => {
   const hub = new ActivityHub({ engineBin, targetScore: 32, readTimeoutMs: 900000 });
