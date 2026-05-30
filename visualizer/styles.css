@@ -165,6 +165,7 @@ h1 {
   display: grid;
   grid-template-columns: minmax(250px, 320px) minmax(520px, 1fr) minmax(280px, 360px);
   grid-auto-rows: auto;
+  grid-auto-flow: row;
   align-items: start;
   gap: 18px;
   padding: 18px;
@@ -175,6 +176,7 @@ h1 {
 .replay-stage {
   width: 100%;
   align-self: start;
+  height: fit-content;
   border: 1px solid rgba(34, 31, 26, 0.12);
   border-radius: 8px;
   background: rgba(255, 252, 245, 0.92);
@@ -186,6 +188,12 @@ h1 {
   display: flex;
   flex-direction: column;
   padding: 14px;
+}
+
+.log-panel,
+.timeline-panel {
+  max-height: calc(100vh - 112px);
+  overflow: hidden;
 }
 
 .panel-heading {
@@ -218,7 +226,8 @@ h2 {
   width: 100%;
   height: clamp(320px, 48vh, 620px);
   min-height: 360px;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  overflow: auto;
   resize: none;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -311,12 +320,21 @@ h2 {
 
 .table-wrap {
   min-height: 0;
-  height: clamp(340px, 34vw, 480px);
+  height: clamp(370px, 26vw, 390px);
   padding: 14px;
 }
 
 .felt-table {
   position: relative;
+  display: grid;
+  grid-template-areas:
+    "top top top"
+    "left center right"
+    "bottom bottom bottom";
+  grid-template-columns: minmax(150px, 0.95fr) minmax(240px, 1.12fr) minmax(150px, 0.95fr);
+  grid-template-rows: auto minmax(116px, 1fr) auto;
+  gap: 8px 10px;
+  padding: 12px;
   min-height: 0;
   height: 100%;
   border-radius: 8px;
@@ -338,12 +356,17 @@ h2 {
 }
 
 .seat {
-  position: absolute;
-  width: min(29%, 220px);
-  min-height: 124px;
+  position: relative;
+  width: 100%;
+  min-height: 86px;
   display: grid;
-  gap: 8px;
-  padding: 10px;
+  grid-template-areas:
+    "header card"
+    "meta card";
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px;
+  padding: 7px;
   border: 1px solid rgba(255, 250, 240, 0.24);
   border-radius: 8px;
   color: #fffaf0;
@@ -352,27 +375,25 @@ h2 {
 }
 
 .seat-top {
-  top: 18px;
-  left: 50%;
-  transform: translateX(-50%);
+  grid-area: top;
+  justify-self: center;
+  width: min(58%, 220px);
 }
 
 .seat-bottom {
-  bottom: 18px;
-  left: 50%;
-  transform: translateX(-50%);
+  grid-area: bottom;
+  justify-self: center;
+  width: min(58%, 220px);
 }
 
 .seat-left {
-  top: 50%;
-  left: 18px;
-  transform: translateY(-50%);
+  grid-area: left;
+  align-self: center;
 }
 
 .seat-right {
-  top: 50%;
-  right: 18px;
-  transform: translateY(-50%);
+  grid-area: right;
+  align-self: center;
 }
 
 .seat.is-active {
@@ -385,6 +406,8 @@ h2 {
 }
 
 .seat-header {
+  grid-area: header;
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -402,9 +425,9 @@ h2 {
 .team-badge {
   flex: 0 0 auto;
   border-radius: 999px;
-  padding: 4px 8px;
+  padding: 3px 7px;
   color: #fffaf0;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 900;
 }
 
@@ -417,30 +440,39 @@ h2 {
 }
 
 .seat-meta {
-  min-height: 18px;
+  grid-area: meta;
+  min-height: 16px;
   color: rgba(255, 250, 240, 0.72);
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .seat-card-slot {
-  min-height: 54px;
+  grid-area: card;
+  min-height: 32px;
+  min-width: 38px;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
+}
+
+.seat .card-small {
+  width: 34px;
 }
 
 .table-center {
-  position: absolute;
-  inset: 27% 29%;
-  min-width: 260px;
+  position: relative;
+  grid-area: center;
+  min-width: 0;
+  width: 100%;
+  align-self: center;
   display: grid;
   grid-template-rows: auto 1fr auto;
   align-items: center;
   justify-items: center;
-  gap: 12px;
+  gap: 6px;
   color: #fffaf0;
 }
 
@@ -449,8 +481,8 @@ h2 {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: 8px;
+  padding: 8px 10px;
   border: 1px solid rgba(255, 250, 240, 0.24);
   border-radius: 8px;
   background: rgba(10, 34, 27, 0.72);
@@ -474,7 +506,7 @@ h2 {
 
 .trick-cards {
   width: 100%;
-  min-height: 122px;
+  min-height: 94px;
   display: grid;
   grid-template-columns: repeat(4, minmax(58px, 1fr));
   align-items: center;
@@ -557,9 +589,29 @@ h2 {
 }
 
 .trick-cards .card {
-  border-color: rgba(255, 250, 240, 0.96);
-  background: linear-gradient(160deg, #fffefa, #f8eddb);
+  width: 50px;
+  border-color: rgba(255, 250, 240, 0.98);
+  background: linear-gradient(160deg, #fffefb, #fff7e9);
   box-shadow: 0 10px 22px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(34, 31, 26, 0.12);
+}
+
+.trick-cards .card:not(.card-ghost) {
+  --card-ink: #15171b;
+  --card-suit: #15171b;
+}
+
+.trick-cards .card-red:not(.card-ghost) {
+  --card-ink: #7f111c;
+  --card-suit: #a21421;
+}
+
+.trick-cards .card:not(.card-ghost) .card-rank,
+.trick-cards .card:not(.card-ghost) .card-foot {
+  color: var(--card-ink);
+}
+
+.trick-cards .card:not(.card-ghost) .card-suit {
+  color: var(--card-suit);
 }
 
 .trick-cards .card-ghost {
@@ -616,11 +668,6 @@ h2 {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fffaf0;
-}
-
-.timeline-panel {
-  max-height: calc(100vh - 112px);
-  overflow: hidden;
 }
 
 .game-nav {
@@ -931,7 +978,15 @@ h2 {
     padding: 5px;
   }
 
+  .trick-cards .card {
+    width: 42px;
+  }
+
   .card-small {
+    width: 30px;
+  }
+
+  .seat .card-small {
     width: 30px;
   }
 
@@ -992,7 +1047,41 @@ h2 {
 
 @media (max-width: 560px) {
   .table-wrap {
-    height: clamp(340px, 86vw, 390px);
+    height: clamp(420px, 112vw, 470px);
+  }
+
+  .felt-table {
+    grid-template-areas:
+      "top top"
+      "center center"
+      "left right"
+      "bottom bottom";
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto;
+    gap: 6px;
+  }
+
+  .seat {
+    min-height: 64px;
+  }
+
+  .seat-top,
+  .seat-bottom {
+    width: min(80%, 240px);
+  }
+
+  .seat .card-small {
+    width: 28px;
+  }
+
+  .team-badge {
+    padding: 2px 5px;
+    font-size: 0.62rem;
+  }
+
+  .table-center {
+    width: min(100%, 292px);
+    justify-self: center;
   }
 
   .contract-panel {
@@ -1003,5 +1092,16 @@ h2 {
 
   .contract-panel span:last-child {
     text-align: center;
+  }
+
+  .trick-cards {
+    grid-template-columns: repeat(4, minmax(38px, 1fr));
+    min-height: 82px;
+    gap: 4px;
+  }
+
+  .trick-cards .card {
+    width: 40px;
+    padding: 4px;
   }
 }
