@@ -61,6 +61,14 @@ function proxyPayload(userId) {
   };
 }
 
+function activityInstance({ users = ["user-1"], instanceId = "instance-1", applicationId = "123" } = {}) {
+  return {
+    application_id: applicationId,
+    instance_id: instanceId,
+    users
+  };
+}
+
 async function startFakeDiscordApi(handler) {
   const port = await reservePort();
   const server = http.createServer(handler);
@@ -207,6 +215,16 @@ test("production API can require Discord proxy signatures", async () => {
 
 test("production API binds signed proxy users to Activity sessions", async () => {
   const { publicKey, privateKey } = crypto.generateKeyPairSync("ed25519");
+  const discord = await startFakeDiscordApi((request, response) => {
+    const url = new URL(request.url, "http://discord.test");
+    if (request.method === "GET" && url.pathname === "/applications/123/activity-instances/instance-1") {
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify(activityInstance({ users: ["user-1"] })));
+      return;
+    }
+    response.writeHead(404, { "Content-Type": "application/json" });
+    response.end(JSON.stringify({ message: "not found" }));
+  });
   const port = await reservePort();
   const server = spawn(process.execPath, ["activity/server/index.js"], {
     cwd: repoRoot,
@@ -219,6 +237,7 @@ test("production API binds signed proxy users to Activity sessions", async () =>
       DISCORD_CLIENT_SECRET: "secret",
       DISCORD_BOT_TOKEN: "bot",
       ACTIVITY_SESSION_SECRET: "0123456789abcdef0123456789abcdef",
+      DISCORD_API_BASE_URL: discord.baseUrl,
       DISCORD_PROXY_PUBLIC_KEY: discordPublicKeyHex(publicKey)
     },
     stdio: ["ignore", "pipe", "pipe"]
@@ -247,6 +266,71 @@ test("production API binds signed proxy users to Activity sessions", async () =>
   } finally {
     server.kill();
     await new Promise((resolve) => server.once("exit", resolve));
+    await discord.close();
+  }
+});
+
+test("production API revalidates Activity session membership on events and actions", async () => {
+  const { publicKey, privateKey } = crypto.generateKeyPairSync("ed25519");
+  let users = [];
+  const discord = await startFakeDiscordApi((request, response) => {
+    const url = new URL(request.url, "http://discord.test");
+    if (request.method === "GET" && url.pathname === "/applications/123/activity-instances/instance-1") {
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify(activityInstance({ users })));
+      return;
+    }
+    response.writeHead(404, { "Content-Type": "application/json" });
+    response.end(JSON.stringify({ message: "not found" }));
+  });
+  const port = await reservePort();
+  const server = spawn(process.execPath, ["activity/server/index.js"], {
+    cwd: repoRoot,
+    env: {
+      ...process.env,
+      ACTIVITY_PORT: String(port),
+      ACTIVITY_HOST: "127.0.0.1",
+      ACTIVITY_ALLOW_INSECURE_DEV: "0",
+      DISCORD_CLIENT_ID: "123",
+      DISCORD_CLIENT_SECRET: "secret",
+      DISCORD_BOT_TOKEN: "bot",
+      DISCORD_API_BASE_URL: discord.baseUrl,
+      ACTIVITY_SESSION_SECRET: "0123456789abcdef0123456789abcdef",
+      DISCORD_PROXY_PUBLIC_KEY: discordPublicKeyHex(publicKey)
+    },
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+
+  try {
+    const baseUrl = `http://127.0.0.1:${port}`;
+    await waitForHealth(baseUrl);
+
+    const session = signSession(
+      { user: { id: "user-1", name: "User One", avatar: "" }, instanceId: "instance-1" },
+      { secret: "0123456789abcdef0123456789abcdef" }
+    );
+    const headers = signedProxyHeaders(proxyPayload("user-1"), privateKey);
+
+    const staleEvents = await fetch(`${baseUrl}/api/events?session=${encodeURIComponent(session)}`, { headers });
+    assert.equal(staleEvents.status, 403);
+    assert.match(await staleEvents.text(), /Activity instance verification failed/);
+
+    const staleAction = await fetch(`${baseUrl}/api/action`, {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ session, kind: "BUY_CALL", call: "BAS" })
+    });
+    assert.equal(staleAction.status, 403);
+    assert.match(await staleAction.text(), /Activity instance verification failed/);
+
+    users = ["user-1"];
+    const activeEvents = await fetch(`${baseUrl}/api/events?session=${encodeURIComponent(session)}`, { headers });
+    assert.equal(activeEvents.status, 200);
+    await activeEvents.body.cancel();
+  } finally {
+    server.kill();
+    await new Promise((resolve) => server.once("exit", resolve));
+    await discord.close();
   }
 });
 

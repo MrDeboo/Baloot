@@ -112,6 +112,16 @@ async function verifyActivityInstance({ userId, instanceId }) {
   };
 }
 
+async function assertActivitySessionStillActive(auth) {
+  if (allowInsecureDev) return;
+  const instance = await verifyActivityInstance({ userId: auth.user.id, instanceId: auth.instanceId });
+  if (!instance.verified) {
+    const error = new Error(`Discord Activity instance verification failed: ${instance.reason}`);
+    error.statusCode = 403;
+    throw error;
+  }
+}
+
 async function exchangeDiscordToken(code) {
   const clientId = process.env.DISCORD_CLIENT_ID;
   const clientSecret = process.env.DISCORD_CLIENT_SECRET;
@@ -293,6 +303,7 @@ const server = http.createServer(async (request, response) => {
         return;
       }
       assertProxyUserMatches(proxy, auth.user.id);
+      await assertActivitySessionStillActive(auth);
       const room = hub.getRoom(auth.instanceId || url.searchParams.get("room"));
       room.connect({ user: auth.user, response });
       return;
@@ -306,6 +317,7 @@ const server = http.createServer(async (request, response) => {
         return;
       }
       assertProxyUserMatches(proxy, auth.user.id);
+      await assertActivitySessionStillActive(auth);
       const room = hub.getRoom(auth.instanceId || body.roomId);
       room.submitAction(auth.user.id, body);
       json(response, 200, { ok: true });
@@ -319,7 +331,7 @@ const server = http.createServer(async (request, response) => {
 
     json(response, 404, { error: "Not found" });
   } catch (error) {
-    json(response, 400, { error: error.message });
+    json(response, error.statusCode ?? 400, { error: error.message });
   }
 });
 
