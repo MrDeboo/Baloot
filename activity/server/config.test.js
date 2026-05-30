@@ -82,6 +82,11 @@ async function startFakeDiscordApi(handler) {
   };
 }
 
+function sessionCookieHeader(response) {
+  const cookie = response.headers.get("set-cookie") ?? "";
+  return cookie.split(";")[0];
+}
+
 test("production config rejects insecure mock users", async () => {
   const port = await reservePort();
   const server = spawn(process.execPath, ["activity/server/index.js"], {
@@ -114,6 +119,78 @@ test("production config rejects insecure mock users", async () => {
   } finally {
     server.kill();
     await new Promise((resolve) => server.once("exit", resolve));
+  }
+});
+
+test("production token exchange sets an Activity session cookie", async () => {
+  const discord = await startFakeDiscordApi((request, response) => {
+    const url = new URL(request.url, "http://discord.test");
+    if (request.method === "POST" && url.pathname === "/oauth2/token") {
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify({ access_token: "access-1", token_type: "Bearer", expires_in: 3600 }));
+      return;
+    }
+    if (request.method === "GET" && url.pathname === "/users/@me") {
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify({ id: "user-1", username: "User One" }));
+      return;
+    }
+    if (request.method === "GET" && url.pathname === "/applications/123/activity-instances/instance-1") {
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify(activityInstance({ users: ["user-1"] })));
+      return;
+    }
+    response.writeHead(404, { "Content-Type": "application/json" });
+    response.end(JSON.stringify({ message: "not found" }));
+  });
+  const port = await reservePort();
+  const server = spawn(process.execPath, ["activity/server/index.js"], {
+    cwd: repoRoot,
+    env: {
+      ...process.env,
+      ACTIVITY_PORT: String(port),
+      ACTIVITY_HOST: "127.0.0.1",
+      ACTIVITY_ALLOW_INSECURE_DEV: "0",
+      DISCORD_CLIENT_ID: "123",
+      DISCORD_CLIENT_SECRET: "secret",
+      DISCORD_BOT_TOKEN: "bot",
+      DISCORD_API_BASE_URL: discord.baseUrl,
+      ACTIVITY_SESSION_SECRET: "0123456789abcdef0123456789abcdef"
+    },
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+
+  try {
+    const baseUrl = `http://127.0.0.1:${port}`;
+    await waitForHealth(baseUrl);
+
+    const token = await fetch(`${baseUrl}/api/token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: "code-1", instanceId: "instance-1" })
+    });
+    assert.equal(token.status, 200);
+    assert.match(token.headers.get("set-cookie") ?? "", /baloot_activity_session=.*HttpOnly/);
+
+    const tokenBody = await token.json();
+    assert.ok(tokenBody.session);
+
+    const cookie = sessionCookieHeader(token);
+    const events = await fetch(`${baseUrl}/api/events`, { headers: { Cookie: cookie } });
+    assert.equal(events.status, 200);
+
+    const action = await fetch(`${baseUrl}/api/action`, {
+      method: "POST",
+      headers: { Cookie: cookie, "Content-Type": "application/json" },
+      body: JSON.stringify({ kind: "BUY_CALL", call: "BAS" })
+    });
+    assert.equal(action.status, 400);
+    assert.match(await action.text(), /engine is not waiting/i);
+    await events.body.cancel();
+  } finally {
+    server.kill();
+    await new Promise((resolve) => server.once("exit", resolve));
+    await discord.close();
   }
 });
 

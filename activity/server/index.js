@@ -19,6 +19,7 @@ const discordBotToken = process.env.DISCORD_BOT_TOKEN ?? "";
 const discordProxyPublicKey = process.env.DISCORD_PROXY_PUBLIC_KEY || process.env.DISCORD_APPLICATION_PUBLIC_KEY || "";
 const activityAssetVersion = process.env.ACTIVITY_ASSET_VERSION || Date.now().toString(36);
 const discordApiBase = process.env.DISCORD_API_BASE_URL ?? "https://discord.com/api/v10";
+const sessionCookieName = "baloot_activity_session";
 const hub = new ActivityHub({
   verifyPlayersReady: ({ roomId, userIds }) =>
     verifyActivityPlayers({ instanceId: roomId, userIds })
@@ -33,8 +34,8 @@ const mimeTypes = new Map([
   [".svg", "image/svg+xml"]
 ]);
 
-function json(response, status, value) {
-  response.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
+function json(response, status, value, headers = {}) {
+  response.writeHead(status, { "Content-Type": "application/json; charset=utf-8", ...headers });
   response.end(JSON.stringify(value));
 }
 
@@ -61,6 +62,36 @@ function readBody(request) {
     });
     request.on("error", reject);
   });
+}
+
+function cookieValue(request, name) {
+  const header = request.headers.cookie;
+  if (!header) return "";
+  for (const part of header.split(";")) {
+    const index = part.indexOf("=");
+    if (index === -1) continue;
+    const key = part.slice(0, index).trim();
+    if (key !== name) continue;
+    try {
+      return decodeURIComponent(part.slice(index + 1).trim());
+    } catch {
+      return "";
+    }
+  }
+  return "";
+}
+
+function sessionCookieHeader(session) {
+  const secure = new URL(publicUrl).protocol === "https:";
+  const attributes = [
+    `${sessionCookieName}=${encodeURIComponent(session)}`,
+    "Path=/api",
+    "HttpOnly",
+    "Max-Age=86400",
+    secure ? "SameSite=None" : "SameSite=Lax"
+  ];
+  if (secure) attributes.push("Secure");
+  return attributes.join("; ");
 }
 
 async function verifyActivityPlayers({ userIds, instanceId }) {
@@ -163,8 +194,8 @@ async function exchangeDiscordToken(code) {
   };
 }
 
-function userFromRequest(url, body = {}) {
-  const session = body.session ?? url.searchParams.get("session");
+function userFromRequest(request, url, body = {}) {
+  const session = body.session || url.searchParams.get("session") || cookieValue(request, sessionCookieName);
   const sessionPayload = verifySession(session, { secret: sessionSecret });
   if (sessionPayload?.user) {
     return { user: sessionPayload.user, instanceId: sessionPayload.instanceId ?? "" };
@@ -288,16 +319,17 @@ const server = http.createServer(async (request, response) => {
         });
         return;
       }
+      const session = signSession({ user: token.user, instanceId }, { secret: sessionSecret });
       json(response, 200, {
         ...token,
         instance,
-        session: signSession({ user: token.user, instanceId }, { secret: sessionSecret })
-      });
+        session
+      }, { "Set-Cookie": sessionCookieHeader(session) });
       return;
     }
 
     if (request.method === "GET" && requestPath === "/api/events") {
-      const auth = userFromRequest(url);
+      const auth = userFromRequest(request, url);
       if (!auth) {
         json(response, 401, { error: "Missing or invalid Activity session." });
         return;
@@ -311,7 +343,7 @@ const server = http.createServer(async (request, response) => {
 
     if (request.method === "POST" && requestPath === "/api/action") {
       const body = await readBody(request);
-      const auth = userFromRequest(url, body);
+      const auth = userFromRequest(request, url, body);
       if (!auth) {
         json(response, 401, { error: "Missing or invalid Activity session." });
         return;

@@ -79,6 +79,7 @@ let apiPrefix = "";
 let activityParticipants = [];
 let activityParticipantsReady = false;
 let inviteAvailable = false;
+let eventSourceUsedSessionQuery = false;
 
 function cardColor(card) {
   return card.endsWith("H") || card.endsWith("D") ? "red" : "black";
@@ -183,15 +184,23 @@ async function authenticate() {
   setStatus("Discord Activity connected");
 }
 
-function connectEvents() {
+function connectEvents({ useSessionQuery = false } = {}) {
+  eventSourceUsedSessionQuery = useSessionQuery;
   const params = new URLSearchParams({ room: roomId, name: user.name, userId: user.id });
-  if (session) params.set("session", session);
+  if (session && useSessionQuery) params.set("session", session);
   eventSource = new EventSource(`${apiPath("/api/events")}?${params}`);
   eventSource.addEventListener("snapshot", (event) => {
     snapshot = JSON.parse(event.data);
     render();
   });
-  eventSource.onerror = () => setStatus("Reconnecting...");
+  eventSource.onerror = () => {
+    if (session && !snapshot && !eventSourceUsedSessionQuery) {
+      eventSource.close();
+      connectEvents({ useSessionQuery: true });
+      return;
+    }
+    setStatus("Reconnecting...");
+  };
 }
 
 function renderPeople(container, people, emptyText) {

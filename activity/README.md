@@ -136,6 +136,9 @@ are missing.
 - When proxy request signatures are enabled, signed Discord proxy user context is
   bound to the Activity session user for `/api/token`, `/api/events`, and
   `/api/action`.
+- `/api/token` sets an HttpOnly Activity session cookie for same-origin
+  `/api/events` and `/api/action` requests. The client falls back to the signed
+  session token for the event stream if cookies are unavailable.
 - Backend calls to Discord's OAuth, user, and Activity Instance APIs retry HTTP
   429 responses using Discord's `Retry-After`, `X-RateLimit-Reset-After`, or
   `retry_after` values before surfacing a failure. These calls use Discord's
