@@ -136,7 +136,7 @@ async function authenticate() {
     throw new Error("Discord client id is missing and local mock mode is disabled.");
   }
 
-  const { DiscordSDK } = await import("https://esm.sh/@discord/embedded-app-sdk@1?bundle");
+  const { DiscordSDK } = await import("./vendor/discord-embedded-app-sdk/output/index.mjs");
   discordSdk = new DiscordSDK(config.clientId);
   await discordSdk.ready();
   roomId = discordSdk.instanceId || roomId;

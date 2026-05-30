@@ -176,7 +176,9 @@ C++ network engine. It seats the first four users in an Activity instance as
 players, starts only after all four player seats are filled, and keeps later
 joiners as spectators. The Activity backend does not run bots; it opens four
 TCP proxy seats to `baloot-server` and forwards real player actions into the
-engine.
+engine. The Activity client serves its copy of `@discord/embedded-app-sdk`
+locally from `activity/client/vendor/discord-embedded-app-sdk/`, so deployment
+does not depend on a runtime SDK CDN import.
 
 Build the C++ engine first, then run the Activity backend:
 

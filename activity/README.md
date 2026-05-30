@@ -9,6 +9,10 @@ seats are filled is kept as a spectator. The backend does not run bots or choose
 actions for players; it only forwards player-submitted actions to the C++ engine
 when the engine asks that seat for a move.
 
+The client serves a vendored copy of `@discord/embedded-app-sdk` from
+`activity/client/vendor/discord-embedded-app-sdk/` so a production Activity does
+not need an extra external CDN URL mapping for the SDK import.
+
 ## Discord Setup
 
 1. Create a Discord application and enable Activities in the Developer Portal.
@@ -76,6 +80,8 @@ are missing.
 - If the engine rejects an action, disconnects, or times out, the existing
   engine forfeit behavior is preserved.
 - In Discord, the client uses the `/.proxy/api/*` path supported by the backend.
+- The Embedded App SDK is loaded from the Activity's own static assets rather
+  than from an external CDN.
 - In production mode, `/api/token` verifies the authenticated user is present in
   the Discord Activity instance before issuing an Activity session.
 
