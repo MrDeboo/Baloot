@@ -169,6 +169,37 @@ On Windows:
 py -m http.server 8765
 ```
 
+## Discord Activity
+
+The `activity/` folder contains a Discord Activity web app that uses the same
+C++ network engine. It seats the first four users in an Activity instance as
+players, starts only after all four player seats are filled, and keeps later
+joiners as spectators. The Activity backend does not run bots; it opens four
+TCP proxy seats to `baloot-server` and forwards real player actions into the
+engine.
+
+Build the C++ engine first, then run the Activity backend:
+
+```sh
+cd activity
+cp .env.example .env
+node server/index.js
+```
+
+For local mock testing without Discord OAuth:
+
+```text
+http://127.0.0.1:3000/?mock=1&room=dev&name=Player-1
+```
+
+Open four browser profiles or tabs with different `name` values to start a
+game. A fifth user in the same `room` joins as a spectator.
+
+For Discord deployment, configure an Activity URL mapping in the Discord
+Developer Portal and set `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`,
+`ACTIVITY_SESSION_SECRET`, and `ACTIVITY_PUBLIC_URL`. See
+`activity/README.md` for details.
+
 ## Platform Notes
 
 - The TCP server binds to `127.0.0.1`, so matches run locally by default on both

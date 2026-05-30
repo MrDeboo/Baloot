@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Baloot Activity</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main class="activity-shell">
+      <header class="topbar">
+        <div>
+          <h1>Baloot</h1>
+          <p id="roomStatus">Connecting...</p>
+        </div>
+        <div id="selfBadge" class="self-badge">Spectator</div>
+      </header>
+
+      <section class="lobby-strip" aria-label="Lobby">
+        <div>
+          <h2>Players</h2>
+          <div id="playerList" class="avatar-list"></div>
+        </div>
+        <div>
+          <h2>Spectators</h2>
+          <div id="spectatorList" class="avatar-list"></div>
+        </div>
+      </section>
+
+      <section class="table" aria-label="Game table">
+        <div id="seatTop" class="seat seat-top"></div>
+        <div id="seatLeft" class="seat seat-left"></div>
+        <div id="seatRight" class="seat seat-right"></div>
+        <div id="seatBottom" class="seat seat-bottom"></div>
+
+        <div class="center-panel">
+          <div class="score-row">
+            <span>Team A <strong id="scoreA">0</strong></span>
+            <span>Team B <strong id="scoreB">0</strong></span>
+          </div>
+          <div id="contractLabel" class="contract-label">Waiting for 4 players</div>
+          <div id="trickCards" class="trick-cards"></div>
+          <div id="turnLabel" class="turn-label">No turn yet</div>
+        </div>
+      </section>
+
+      <section class="hand-panel" aria-label="Your hand">
+        <div class="panel-heading">
+          <h2>Your Hand</h2>
+          <span id="handStatus">Join as one of the first four players to play.</span>
+        </div>
+        <div id="handCards" class="hand-cards"></div>
+        <form id="actionForm" class="action-form">
+          <div id="buyControls" class="buy-controls hidden">
+            <select id="buyCall">
+              <option value="BAS">Bas</option>
+              <option value="SUN">Sun</option>
+              <option value="HUKUM">Hukum</option>
+              <option value="ASHKAL">Ashkal</option>
+              <option value="GABLAK_SUN">Gablak Sun</option>
+              <option value="GABLAK_ASHKAL">Gablak Ashkal</option>
+              <option value="BET_OPEN">Bet Open</option>
+              <option value="BET_CLOSE">Bet Close</option>
+              <option value="BET_DOUBLE">Double</option>
+              <option value="BET_TRIPLE">Triple</option>
+              <option value="BET_QUADRUPLE">Quadruple</option>
+              <option value="GAHWA">Gahwa</option>
+              <option value="ENFORCE_SUN">Enforce Sun</option>
+              <option value="ENFORCE_HUKUM">Enforce Hukum</option>
+            </select>
+            <select id="trumpSuit">
+              <option value="">No trump</option>
+              <option value="C">Clubs</option>
+              <option value="D">Diamonds</option>
+              <option value="H">Hearts</option>
+              <option value="S">Spades</option>
+            </select>
+          </div>
+
+          <div id="playControls" class="play-controls hidden">
+            <label><input id="ikkahFlag" type="checkbox"> Ikkah</label>
+            <label><input id="balootFlag" type="checkbox"> Baloot</label>
+            <input id="projectKind" type="text" placeholder="Project">
+            <input id="projectCards" type="text" placeholder="Project cards">
+          </div>
+
+          <button id="submitAction" class="primary-button" type="submit" disabled>Submit</button>
+        </form>
+      </section>
+
+      <aside class="log-panel" aria-label="Match log">
+        <h2>Match Log</h2>
+        <div id="matchLog" class="match-log"></div>
+      </aside>
+    </main>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

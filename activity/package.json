@@ -1,0 +1,15 @@
+{
+  "name": "baloot-discord-activity",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Discord Activity shell for the Baloot C++ engine.",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "ACTIVITY_ALLOW_INSECURE_DEV=1 node server/index.js",
+    "test": "node --test server/*.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
