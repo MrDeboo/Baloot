@@ -84,6 +84,12 @@ async function verifyActivityPlayers({ userIds, instanceId }) {
     return { verified: false, skipped: false, reason: `Discord returned ${response.status}` };
   }
   const instance = await response.json();
+  if (String(instance.application_id ?? "") !== String(clientId)) {
+    return { verified: false, skipped: false, reason: "Activity instance application mismatch" };
+  }
+  if (String(instance.instance_id ?? "") !== String(instanceId)) {
+    return { verified: false, skipped: false, reason: "Activity instance id mismatch" };
+  }
   const users = Array.isArray(instance.users) ? instance.users.map(String) : [];
   const missing = userIds.map(String).filter((userId) => !users.includes(userId));
   return {

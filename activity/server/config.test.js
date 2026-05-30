@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
+import http from "node:http";
 import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -60,6 +61,19 @@ function proxyPayload(userId) {
   };
 }
 
+async function startFakeDiscordApi(handler) {
+  const port = await reservePort();
+  const server = http.createServer(handler);
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(port, "127.0.0.1", resolve);
+  });
+  return {
+    baseUrl: `http://127.0.0.1:${port}`,
+    close: () => new Promise((resolve) => server.close(resolve))
+  };
+}
+
 test("production config rejects insecure mock users", async () => {
   const port = await reservePort();
   const server = spawn(process.execPath, ["activity/server/index.js"], {
@@ -92,6 +106,72 @@ test("production config rejects insecure mock users", async () => {
   } finally {
     server.kill();
     await new Promise((resolve) => server.once("exit", resolve));
+  }
+});
+
+test("production token exchange rejects Activity instance response mismatches", async () => {
+  let instanceResponse = { application_id: "other-app", instance_id: "instance-1", users: ["user-1"] };
+  const discord = await startFakeDiscordApi((request, response) => {
+    const url = new URL(request.url, "http://discord.test");
+    if (request.method === "POST" && url.pathname === "/oauth2/token") {
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify({ access_token: "access-1", token_type: "Bearer", expires_in: 3600 }));
+      return;
+    }
+    if (request.method === "GET" && url.pathname === "/users/@me") {
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify({ id: "user-1", username: "User One" }));
+      return;
+    }
+    if (request.method === "GET" && url.pathname === "/applications/123/activity-instances/instance-1") {
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify(instanceResponse));
+      return;
+    }
+    response.writeHead(404, { "Content-Type": "application/json" });
+    response.end(JSON.stringify({ message: "not found" }));
+  });
+  const port = await reservePort();
+  const server = spawn(process.execPath, ["activity/server/index.js"], {
+    cwd: repoRoot,
+    env: {
+      ...process.env,
+      ACTIVITY_PORT: String(port),
+      ACTIVITY_HOST: "127.0.0.1",
+      ACTIVITY_ALLOW_INSECURE_DEV: "0",
+      DISCORD_CLIENT_ID: "123",
+      DISCORD_CLIENT_SECRET: "secret",
+      DISCORD_BOT_TOKEN: "bot",
+      DISCORD_API_BASE_URL: discord.baseUrl,
+      ACTIVITY_SESSION_SECRET: "0123456789abcdef0123456789abcdef"
+    },
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+
+  try {
+    const baseUrl = `http://127.0.0.1:${port}`;
+    await waitForHealth(baseUrl);
+
+    const token = await fetch(`${baseUrl}/api/token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: "code-1", instanceId: "instance-1" })
+    });
+    assert.equal(token.status, 403);
+    assert.match(await token.text(), /application mismatch/);
+
+    instanceResponse = { application_id: "123", instance_id: "other-instance", users: ["user-1"] };
+    const wrongInstance = await fetch(`${baseUrl}/api/token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: "code-2", instanceId: "instance-1" })
+    });
+    assert.equal(wrongInstance.status, 403);
+    assert.match(await wrongInstance.text(), /instance id mismatch/);
+  } finally {
+    server.kill();
+    await new Promise((resolve) => server.once("exit", resolve));
+    await discord.close();
   }
 });
 
