@@ -6,6 +6,8 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+find_package(Threads REQUIRED)
+
 add_library(baloot_core
   src/core/action.cpp
   src/core/card.cpp
@@ -25,9 +27,20 @@ add_library(baloot_core
 
 target_include_directories(baloot_core PUBLIC src)
 
+target_link_libraries(baloot_core PUBLIC Threads::Threads)
+
 target_compile_options(baloot_core PRIVATE
   $<$<CXX_COMPILER_ID:Clang,AppleClang,GNU>:-Wall -Wextra -Wpedantic>
 )
+
+if(WIN32)
+  target_compile_definitions(baloot_core PUBLIC
+    NOMINMAX
+    WIN32_LEAN_AND_MEAN
+    _WIN32_WINNT=0x0601
+  )
+  target_link_libraries(baloot_core PUBLIC ws2_32)
+endif()
 
 add_executable(baloot-local-smoke apps/baloot_local.cpp)
 target_link_libraries(baloot-local-smoke PRIVATE baloot_core)

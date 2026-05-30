@@ -10,10 +10,19 @@
 
 namespace baloot::net {
 
+#ifdef _WIN32
+using socket_handle = std::uintptr_t;
+inline constexpr socket_handle invalid_socket_handle =
+    static_cast<socket_handle>(~socket_handle{0});
+#else
+using socket_handle = int;
+inline constexpr socket_handle invalid_socket_handle = -1;
+#endif
+
 class tcp_connection {
  public:
   tcp_connection() = default;
-  explicit tcp_connection(int fd);
+  explicit tcp_connection(socket_handle fd);
   tcp_connection(const tcp_connection&) = delete;
   tcp_connection& operator=(const tcp_connection&) = delete;
   tcp_connection(tcp_connection&& other) noexcept;
@@ -21,14 +30,14 @@ class tcp_connection {
   ~tcp_connection();
 
   [[nodiscard]] bool valid() const;
-  [[nodiscard]] int fd() const;
+  [[nodiscard]] socket_handle fd() const;
 
   void close();
   std::string read_frame(int timeout_ms, std::size_t max_frame_bytes);
   void write_frame(std::string_view payload);
 
  private:
-  int fd_ = -1;
+  socket_handle fd_ = invalid_socket_handle;
   std::string read_buffer_;
 };
 
@@ -42,14 +51,14 @@ class tcp_listener {
   ~tcp_listener();
 
   [[nodiscard]] bool valid() const;
-  [[nodiscard]] int fd() const;
+  [[nodiscard]] socket_handle fd() const;
   [[nodiscard]] std::uint16_t port() const;
 
   tcp_connection accept_one(int timeout_ms = -1);
   void close();
 
  private:
-  int fd_ = -1;
+  socket_handle fd_ = invalid_socket_handle;
   std::uint16_t port_{};
 };
 

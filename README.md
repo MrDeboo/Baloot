@@ -28,21 +28,42 @@ legal matches reliably rather than trying to play expert Baloot.
 
 ## Requirements
 
-- C++23 compiler. Verified here with Apple Clang 17.
-- CMake 3.24+ for the intended build.
+- C++23 compiler.
+- CMake 3.24+.
+- macOS: Xcode Command Line Tools, Apple Clang 17+, LLVM Clang, or GCC.
+- Windows: Visual Studio 2022 with the Desktop development with C++ workload, or
+  MinGW-w64/GCC with Ninja.
 - No third-party runtime dependency is required by the current source. JSON is
   encoded/decoded by the small strict parser in `src/net/protocol.cpp`.
 
-`cmake` was not installed in the current execution environment, so verification
-was performed with direct `c++` commands. The CMake project is still present and
-defines the required targets.
+The CMake build links platform libraries automatically, including Winsock
+(`ws2_32`) on Windows.
 
 ## Build
 
+macOS:
+
 ```sh
+brew install cmake
 cmake -S . -B build
-cmake --build build
-ctest --test-dir build
+cmake --build build --parallel
+ctest --test-dir build --output-on-failure
+```
+
+Windows with Visual Studio 2022, from Developer PowerShell:
+
+```powershell
+cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+cmake --build build --config Release --parallel
+ctest --test-dir build -C Release --output-on-failure
+```
+
+Windows with Ninja and MinGW-w64:
+
+```powershell
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel
+ctest --test-dir build --output-on-failure
 ```
 
 Targets:
@@ -52,9 +73,10 @@ Targets:
 - `baloot-local-smoke`
 - `baloot-core-tests`
 
-Direct compiler fallback used during development:
+Direct compiler fallback for macOS/Linux when CMake is unavailable:
 
 ```sh
+mkdir -p build
 c++ -std=c++23 -Wall -Wextra -Wpedantic -Isrc \
   src/core/action.cpp src/core/card.cpp src/core/cards.cpp \
   src/core/host.cpp src/core/project.cpp src/core/rules.cpp \
@@ -66,9 +88,12 @@ c++ -std=c++23 -Wall -Wextra -Wpedantic -Isrc \
 ./build/baloot-core-tests
 ```
 
+On Windows, prefer the CMake commands above. If you compile manually, link
+Winsock explicitly with `Ws2_32.lib` for MSVC or `-lws2_32` for MinGW.
+
 ## Run A Match
 
-Start a server for one match:
+Start a server for one match on macOS:
 
 ```sh
 ./build/baloot-server --port 33999 --target-score 152 --matches 1
@@ -82,6 +107,24 @@ Launch four bots in separate terminals:
 ./build/baloot-bot --host 127.0.0.1 --port 33999 --name bot-c
 ./build/baloot-bot --host 127.0.0.1 --port 33999 --name bot-d
 ```
+
+Start a server for one match on Windows with the Visual Studio generator:
+
+```powershell
+.\build\Release\baloot-server.exe --port 33999 --target-score 152 --matches 1
+```
+
+Launch four bots in separate PowerShell windows:
+
+```powershell
+.\build\Release\baloot-bot.exe --host 127.0.0.1 --port 33999 --name bot-a
+.\build\Release\baloot-bot.exe --host 127.0.0.1 --port 33999 --name bot-b
+.\build\Release\baloot-bot.exe --host 127.0.0.1 --port 33999 --name bot-c
+.\build\Release\baloot-bot.exe --host 127.0.0.1 --port 33999 --name bot-d
+```
+
+If you build with Ninja on Windows, the executables are under `.\build\` instead
+of `.\build\Release\`.
 
 Run two concurrent matches with eight bots:
 
@@ -100,6 +143,29 @@ Open `visualizer/index.html` in a browser to replay a full Baloot match log.
 The visualizer accepts output from `baloot-server` or `baloot-local-smoke`,
 shows each game, trick, card play, winner, and score transition, and includes a
 sample replay by default.
+
+If a browser blocks direct local-file loading, serve the repository and open
+`http://127.0.0.1:8765/visualizer/index.html`:
+
+```sh
+python3 -m http.server 8765
+```
+
+On Windows:
+
+```powershell
+py -m http.server 8765
+```
+
+## Platform Notes
+
+- The TCP server binds to `127.0.0.1`, so matches run locally by default on both
+  macOS and Windows.
+- The network layer uses POSIX sockets on macOS/Linux and Winsock on Windows.
+- CMake defines `_WIN32_WINNT=0x0601`, `WIN32_LEAN_AND_MEAN`, and `NOMINMAX` for
+  Windows builds.
+- Windows Firewall may ask for loopback/network permission the first time you
+  run `baloot-server.exe`.
 
 ## Config
 
