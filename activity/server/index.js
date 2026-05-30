@@ -13,7 +13,7 @@ const port = Number(process.env.ACTIVITY_PORT ?? 3000);
 const host = process.env.ACTIVITY_HOST ?? "127.0.0.1";
 const publicUrl = process.env.ACTIVITY_PUBLIC_URL ?? `http://127.0.0.1:${port}`;
 const sessionSecret = process.env.ACTIVITY_SESSION_SECRET ?? "local-dev-secret";
-const allowInsecureDev = process.env.ACTIVITY_ALLOW_INSECURE_DEV !== "0";
+const allowInsecureDev = process.env.ACTIVITY_ALLOW_INSECURE_DEV === "1";
 const discordBotToken = process.env.DISCORD_BOT_TOKEN ?? "";
 const hub = new ActivityHub();
 

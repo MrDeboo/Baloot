@@ -73,8 +73,8 @@ user in a room.
   production proxy/container.
 - `ACTIVITY_PORT`: backend port, default `3000`.
 - `ACTIVITY_PUBLIC_URL`: public Activity origin.
-- `DISCORD_BOT_TOKEN`: optional but recommended; enables Discord Activity
-  Instance API verification for production sessions.
+- `DISCORD_BOT_TOKEN`: required when `ACTIVITY_ALLOW_INSECURE_DEV=0`; enables
+  Discord Activity Instance API verification for production sessions.
 - `BALOOT_SERVER_BIN`: path to `baloot-server`.
 - `BALOOT_TARGET_SCORE`: target score passed to the engine, default `152`.
 - `BALOOT_READ_TIMEOUT_MS`: engine read timeout, default `900000`.

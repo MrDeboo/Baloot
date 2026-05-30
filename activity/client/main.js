@@ -84,13 +84,17 @@ async function fetchJson(paths, options) {
 
 async function authenticate() {
   const config = await fetchJson(["/api/config", "/.proxy/api/config"]);
-  const mockMode = qs.get("mock") === "1" || !config.clientId;
+  const mockMode = config.allowInsecureDev && (qs.get("mock") === "1" || !config.clientId);
 
   if (mockMode) {
     const name = qs.get("name") || `Player ${Math.floor(Math.random() * 1000)}`;
     user = { id: qs.get("userId") || name, name, avatar: "" };
     setStatus("Local mock mode");
     return;
+  }
+
+  if (!config.clientId) {
+    throw new Error("Discord client id is missing and local mock mode is disabled.");
   }
 
   const { DiscordSDK } = await import("https://esm.sh/@discord/embedded-app-sdk@1?bundle");
