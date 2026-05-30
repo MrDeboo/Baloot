@@ -370,7 +370,11 @@ export class ActivityRoom extends EventEmitter {
   }
 
   async startMatch(expectedPlayers = this.connectedPlayers()) {
-    await this.verifyPlayersReady(expectedPlayers);
+    const verification = await this.verifyPlayersReady(expectedPlayers);
+    if (verification?.verified === false) {
+      this.handleStartVerificationFailure(verification);
+      return;
+    }
     if (this.closed || this.status !== "lobby") return;
 
     const seatedPlayers = this.connectedPlayers();
@@ -388,14 +392,41 @@ export class ActivityRoom extends EventEmitter {
   }
 
   async verifyPlayersReady(players) {
-    if (typeof this.options.verifyPlayersReady !== "function") return;
+    if (typeof this.options.verifyPlayersReady !== "function") return { verified: true };
     const result = await this.options.verifyPlayersReady({
       roomId: this.id,
       userIds: players.map((participant) => participant.user.id)
     });
     if (result === false || result?.verified === false) {
-      throw new Error(`Discord Activity instance verification failed: ${result?.reason || "players are not connected"}.`);
+      return {
+        ...(result && typeof result === "object" ? result : {}),
+        verified: false,
+        reason: result?.reason || "players are not connected"
+      };
     }
+    return { verified: true, ...(result && typeof result === "object" ? result : {}) };
+  }
+
+  handleStartVerificationFailure(result) {
+    const reason = result?.reason || "players are not connected";
+    const missing = Array.isArray(result?.missing) ? result.missing.map(String) : [];
+
+    if (missing.length === 0) {
+      throw new Error(`Discord Activity instance verification failed: ${reason}.`);
+    }
+
+    this.error = `Discord Activity instance verification failed: ${reason}.`;
+    this.state.log.push("Waiting for four active Discord Activity users.");
+    if (this.state.log.length > 80) this.state.log = this.state.log.slice(-80);
+
+    for (const userId of missing) {
+      const participant = this.participants.get(userId);
+      if (participant?.role === "player") {
+        this.participants.delete(userId);
+      }
+    }
+    this.compactLobbySeats();
+    this.broadcast();
   }
 
   connectedPlayers() {

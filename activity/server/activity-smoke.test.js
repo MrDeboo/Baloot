@@ -181,20 +181,46 @@ test("Activity start is gated by the Discord instance participant verifier", asy
     engineBin: "/missing-baloot-server",
     verifyPlayersReady: async (details) => {
       verifierCalls.push(details);
-      return { verified: false, reason: "not all seated users are still in the Activity instance" };
+      return {
+        verified: false,
+        reason: "not all seated users are still in the Activity instance",
+        missing: ["player-1"]
+      };
     }
   });
   const room = hub.getRoom(`verify-${Date.now()}`);
 
   try {
     const players = [1, 2, 3, 4].map((seat) => connect(room, `player-${seat}`));
-    const error = await waitFor(() => latest(players[0])?.status === "error" && latest(players[0]));
+    const lobby = await waitFor(() => latest(players[1])?.players.length === 3 && latest(players[1]));
 
     assert.equal(room.engine, null);
-    assert.match(error.error, /Activity instance verification failed/i);
+    assert.equal(lobby.status, "lobby");
+    assert.match(lobby.error, /Activity instance verification failed/i);
+    assert.deepEqual(lobby.players.map((player) => player.id), ["player-2", "player-3", "player-4"]);
+    assert.equal(latest(players[0]).self.role, "spectator");
     assert.equal(verifierCalls.length, 1);
     assert.equal(verifierCalls[0].roomId, room.id);
     assert.deepEqual(verifierCalls[0].userIds, ["player-1", "player-2", "player-3", "player-4"]);
+  } finally {
+    hub.closeAll();
+  }
+});
+
+test("Activity start enters error on unrecoverable participant verifier failures", async () => {
+  const hub = new ActivityHub({
+    engineBin: "/missing-baloot-server",
+    verifyPlayersReady: async () => ({ verified: false, reason: "Discord returned 500" })
+  });
+  const room = hub.getRoom(`verify-error-${Date.now()}`);
+
+  try {
+    const players = [1, 2, 3, 4].map((seat) => connect(room, `player-${seat}`));
+    const error = await waitFor(() => latest(players[0])?.status === "error" && latest(players[0]));
+
+    assert.equal(room.engine, null);
+    assert.match(error.error, /Discord returned 500/);
+    assert.equal(error.players.length, 4);
   } finally {
     hub.closeAll();
   }
