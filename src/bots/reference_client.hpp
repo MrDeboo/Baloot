@@ -13,7 +13,7 @@ struct reference_client_options {
   std::uint16_t port = 33999;
   std::string name = "baloot-bot";
   unsigned int seed = 0;
-  int read_timeout_ms = 10000;
+  int read_timeout_ms = 120000;
   std::size_t max_frame_bytes = 64 * 1024;
 };
 

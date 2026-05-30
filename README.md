@@ -108,6 +108,15 @@ Launch four bots in separate terminals:
 ./build/baloot-bot --host 127.0.0.1 --port 33999 --name bot-d
 ```
 
+`baloot-bot` waits up to 120 seconds by default. That gives you time to open
+four terminals manually before the first connected bot gives up waiting for the
+table to fill. To override that:
+
+```sh
+./build/baloot-bot --host 127.0.0.1 --port 33999 --name bot-a \
+  --read-timeout-ms 300000
+```
+
 Start a server for one match on Windows with the Visual Studio generator:
 
 ```powershell
@@ -122,6 +131,9 @@ Launch four bots in separate PowerShell windows:
 .\build\Release\baloot-bot.exe --host 127.0.0.1 --port 33999 --name bot-c
 .\build\Release\baloot-bot.exe --host 127.0.0.1 --port 33999 --name bot-d
 ```
+
+The same `--read-timeout-ms 300000` flag works on Windows if you want a longer
+manual-launch window.
 
 If you build with Ninja on Windows, the executables are under `.\build\` instead
 of `.\build\Release\`.
@@ -169,7 +181,20 @@ py -m http.server 8765
 
 ## Config
 
-Flags:
+Bot flags:
+
+- `--host HOST`
+- `--port N`
+- `--name NAME`
+- `--seed N`
+- `--read-timeout-ms N`
+- `--max-frame-bytes N`
+
+`baloot-bot` uses `--read-timeout-ms` for connecting, matchmaking, gameplay
+frames, and final standings. If you see `socket read timed out` while launching
+bots by hand, either start the remaining bots sooner or increase this value.
+
+Server flags:
 
 - `--config path`
 - `--port N`

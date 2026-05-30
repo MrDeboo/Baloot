@@ -1,6 +1,7 @@
 #include "bots/reference_client.hpp"
 #include "core/rules.hpp"
 
+#include <cstddef>
 #include <cstdint>
 #include <iostream>
 #include <string>
@@ -18,6 +19,10 @@ int main(int argc, char** argv) {
       options.name = argv[++i];
     } else if (arg == "--seed" && i + 1 < argc) {
       options.seed = static_cast<unsigned int>(std::stoul(argv[++i]));
+    } else if (arg == "--read-timeout-ms" && i + 1 < argc) {
+      options.read_timeout_ms = std::stoi(argv[++i]);
+    } else if (arg == "--max-frame-bytes" && i + 1 < argc) {
+      options.max_frame_bytes = static_cast<std::size_t>(std::stoul(argv[++i]));
     }
   }
 

@@ -11,7 +11,7 @@
 namespace baloot::net {
 
 struct network_bot_options {
-  int read_timeout_ms = 5000;
+  int read_timeout_ms = 30000;
   std::size_t max_frame_bytes = 64 * 1024;
 };
 
