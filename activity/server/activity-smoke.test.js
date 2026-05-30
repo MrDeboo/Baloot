@@ -137,3 +137,42 @@ test("Activity starts only with four players and makes extras spectators", { ski
     hub.closeAll();
   }
 });
+
+test("Disconnected lobby users do not reserve player seats", { skip: !engineBin }, async () => {
+  const hub = new ActivityHub({ engineBin, targetScore: 32, readTimeoutMs: 900000 });
+  const room = hub.getRoom(`disconnect-${Date.now()}`);
+
+  try {
+    const p1 = connect(room, "drop-before-start");
+    const p2 = connect(room, "player-2");
+    const p3 = connect(room, "player-3");
+
+    p1.end();
+    await waitFor(() => latest(p2)?.players.length === 2);
+    assert.equal(latest(p2).self.seat, 1);
+    assert.equal(latest(p3).self.seat, 2);
+    assert.equal(room.engine, null);
+
+    const p4 = connect(room, "player-4");
+    assert.equal(latest(p4).self.role, "player");
+    assert.equal(latest(p4).self.seat, 3);
+    assert.equal(latest(p4).status, "lobby");
+    assert.equal(room.engine, null);
+
+    const p5 = connect(room, "player-5");
+    await waitFor(() =>
+      [p2, p3, p4, p5].every((response) => latest(response)?.self.hand.length === 5) &&
+      latest(p2)?.status === "playing"
+    );
+
+    assert.equal(latest(p5).self.role, "player");
+    assert.equal(latest(p5).self.seat, 4);
+
+    const spectator = connect(room, "late-spectator");
+    assert.equal(latest(spectator).self.role, "spectator");
+    assert.equal(latest(spectator).self.seat, null);
+    assert.deepEqual(latest(spectator).self.hand, []);
+  } finally {
+    hub.closeAll();
+  }
+});

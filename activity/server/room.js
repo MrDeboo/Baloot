@@ -130,14 +130,24 @@ export class ActivityRoom extends EventEmitter {
   }
 
   ensureParticipant(user) {
+    this.pruneLobbyDisconnects();
     const existing = this.participants.get(user.id);
     if (existing) {
       existing.user = { ...existing.user, ...user };
       existing.connected = true;
+      if (this.status === "lobby" && existing.role === "spectator") {
+        const players = this.connectedPlayers();
+        if (players.length < 4) {
+          existing.role = "player";
+          existing.seat = players.length + 1;
+          this.playersBySeat.set(existing.seat, user.id);
+          this.state.hands.set(existing.seat, []);
+        }
+      }
       return existing;
     }
 
-    const players = [...this.participants.values()].filter((p) => p.role === "player");
+    const players = this.connectedPlayers();
     const asPlayer = this.status === "lobby" && players.length < 4;
     const participant = {
       user,
@@ -157,10 +167,15 @@ export class ActivityRoom extends EventEmitter {
     if (!participant) return;
     const stillConnected = [...this.clients].some((client) => client.userId === userId);
     participant.connected = stillConnected;
+    if (this.status === "lobby" && !stillConnected) {
+      this.participants.delete(userId);
+      this.compactLobbySeats();
+    }
   }
 
   maybeStart() {
-    const seatedPlayers = [...this.participants.values()].filter((p) => p.role === "player");
+    this.pruneLobbyDisconnects();
+    const seatedPlayers = this.connectedPlayers();
     if (this.status !== "lobby" || seatedPlayers.length !== 4) return;
     this.startMatch().catch((error) => {
       this.status = "error";
@@ -176,6 +191,37 @@ export class ActivityRoom extends EventEmitter {
     await this.engine.start();
     this.status = "playing";
     this.broadcast();
+  }
+
+  connectedPlayers() {
+    return [...this.participants.values()]
+      .filter((p) => p.role === "player" && p.connected)
+      .sort((a, b) => a.seat - b.seat);
+  }
+
+  pruneLobbyDisconnects() {
+    if (this.status !== "lobby") return;
+    let changed = false;
+    for (const [userId, participant] of this.participants) {
+      if (!participant.connected) {
+        this.participants.delete(userId);
+        changed = true;
+      }
+    }
+    if (changed) this.compactLobbySeats();
+  }
+
+  compactLobbySeats() {
+    this.playersBySeat.clear();
+    this.state.hands.clear();
+    const players = [...this.participants.values()]
+      .filter((p) => p.role === "player" && p.connected)
+      .sort((a, b) => (a.seat ?? 99) - (b.seat ?? 99));
+    players.forEach((participant, index) => {
+      participant.seat = index + 1;
+      this.playersBySeat.set(participant.seat, participant.user.id);
+      this.state.hands.set(participant.seat, []);
+    });
   }
 
   submitAction(userId, body) {
