@@ -197,9 +197,10 @@ game. A fifth user in the same `room` joins as a spectator.
 
 For Discord deployment, configure an Activity URL mapping in the Discord
 Developer Portal and set `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`,
-`ACTIVITY_SESSION_SECRET`, and `ACTIVITY_PUBLIC_URL`. Set `DISCORD_BOT_TOKEN`
-to enable Activity Instance API verification before users can join a room. See
-`activity/README.md` for details.
+`ACTIVITY_SESSION_SECRET`, `ACTIVITY_PUBLIC_URL`, `DISCORD_BOT_TOKEN`, and
+`ACTIVITY_ALLOW_INSECURE_DEV=0`. Production sessions verify Discord Activity
+instance membership before users can join a room. See `activity/README.md` for
+details.
 
 ## Platform Notes
 

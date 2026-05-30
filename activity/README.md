@@ -47,6 +47,11 @@ http://127.0.0.1:3000/?mock=1&room=dev&name=Adeeb
 Open four browser profiles with different `name` query values to fill the four
 player seats. A fifth browser joins as a spectator.
 
+For production, set `ACTIVITY_ALLOW_INSECURE_DEV=0`. In that mode,
+`DISCORD_BOT_TOKEN` is required: the backend verifies each authenticated user
+against Discord's Activity Instance API before issuing a session or seating the
+user in a room.
+
 ## How It Uses The Engine
 
 - The Activity backend reserves a local TCP port and spawns
@@ -59,8 +64,8 @@ player seats. A fifth browser joins as a spectator.
 - If the engine rejects an action, disconnects, or times out, the existing
   engine forfeit behavior is preserved.
 - In Discord, the client uses the `/.proxy/api/*` path supported by the backend.
-- When `DISCORD_BOT_TOKEN` is set, `/api/token` verifies the authenticated user
-  is present in the Discord Activity instance before issuing an Activity session.
+- In production mode, `/api/token` verifies the authenticated user is present in
+  the Discord Activity instance before issuing an Activity session.
 
 ## Useful Environment Variables
 
@@ -74,3 +79,4 @@ player seats. A fifth browser joins as a spectator.
 - `BALOOT_TARGET_SCORE`: target score passed to the engine, default `152`.
 - `BALOOT_READ_TIMEOUT_MS`: engine read timeout, default `900000`.
 - `ACTIVITY_ALLOW_INSECURE_DEV`: set `1` for mock local users.
+  Set `0` in production; production sessions require `DISCORD_BOT_TOKEN`.

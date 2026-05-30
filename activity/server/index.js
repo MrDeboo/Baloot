@@ -86,19 +86,30 @@ function verifySession(token) {
 }
 
 async function verifyActivityInstance({ userId, instanceId }) {
-  if (!discordBotToken) return { verified: true, skipped: true };
+  if (!discordBotToken) {
+    return {
+      verified: allowInsecureDev,
+      skipped: allowInsecureDev,
+      reason: allowInsecureDev ? "local development mode" : "DISCORD_BOT_TOKEN is required"
+    };
+  }
   const clientId = process.env.DISCORD_CLIENT_ID;
-  if (!clientId || !instanceId) return { verified: false, skipped: false };
+  if (!clientId || !instanceId) {
+    return { verified: false, skipped: false, reason: "missing client id or instance id" };
+  }
 
   const response = await fetch(
     `https://discord.com/api/applications/${clientId}/activity-instances/${instanceId}`,
     { headers: { Authorization: `Bot ${discordBotToken}` } }
   );
-  if (!response.ok) return { verified: false, skipped: false };
+  if (!response.ok) {
+    return { verified: false, skipped: false, reason: `Discord returned ${response.status}` };
+  }
   const instance = await response.json();
   return {
     verified: Array.isArray(instance.users) && instance.users.includes(userId),
-    skipped: false
+    skipped: false,
+    reason: "verified with Discord Activity Instance API"
   };
 }
 
@@ -201,7 +212,8 @@ const server = http.createServer(async (request, response) => {
         publicUrl,
         allowInsecureDev,
         proxyPrefix: "/.proxy",
-        requiresActivityInstanceVerification: Boolean(discordBotToken)
+        requiresActivityInstanceVerification: !allowInsecureDev || Boolean(discordBotToken),
+        hasActivityInstanceVerifier: Boolean(discordBotToken)
       });
       return;
     }
@@ -212,7 +224,10 @@ const server = http.createServer(async (request, response) => {
       const instanceId = typeof body.instanceId === "string" ? body.instanceId : "";
       const instance = await verifyActivityInstance({ userId: token.user.id, instanceId });
       if (!instance.verified) {
-        json(response, 403, { error: "Discord Activity instance verification failed." });
+        json(response, 403, {
+          error: "Discord Activity instance verification failed.",
+          reason: instance.reason
+        });
         return;
       }
       json(response, 200, {

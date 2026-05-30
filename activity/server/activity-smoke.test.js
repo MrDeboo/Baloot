@@ -85,6 +85,10 @@ function waitFor(assertion, timeoutMs = 10000) {
   });
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 test("Activity starts only with four players and makes extras spectators", { skip: !engineBin }, async () => {
   const hub = new ActivityHub({ engineBin, targetScore: 32, readTimeoutMs: 900000 });
   const room = hub.getRoom(`smoke-${Date.now()}`);
@@ -113,6 +117,18 @@ test("Activity starts only with four players and makes extras spectators", { ski
     assert.deepEqual(latest(spectator).self.hand, []);
     assert.equal(latest(spectator).players.length, 4);
     assert.equal(latest(spectator).spectators.length, 1);
+
+    assert.throws(
+      () => room.submitAction("spectator-1", { kind: "BUY_CALL", call: "BAS" }),
+      /Only seated players/
+    );
+    assert.throws(
+      () => room.submitAction("player-2", { kind: "BUY_CALL", call: "BAS" }),
+      /not your turn/
+    );
+
+    await sleep(150);
+    assert.equal(latest(p1).currentTurn.actorId, 1);
 
     room.submitAction("player-1", { kind: "BUY_CALL", call: "BAS" });
     await waitFor(() => latest(p1)?.currentTurn?.actorId === 2);
