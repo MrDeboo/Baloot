@@ -54,12 +54,14 @@ test("production config rejects insecure mock users", async () => {
     const baseUrl = `http://127.0.0.1:${port}`;
     await waitForHealth(baseUrl);
 
-    const config = await fetch(`${baseUrl}/.proxy/api/config`).then((response) => response.json());
+    const config = await fetch(`${baseUrl}/api/config`).then((response) => response.json());
     assert.equal(config.allowInsecureDev, false);
+    assert.equal(config.proxyPrefix, "");
+    assert.equal(config.legacyProxyPrefix, "/.proxy");
     assert.equal(config.requiresActivityInstanceVerification, true);
     assert.equal(config.hasActivityInstanceVerifier, false);
 
-    const events = await fetch(`${baseUrl}/.proxy/api/events?room=prod&name=mock&userId=mock`);
+    const events = await fetch(`${baseUrl}/api/events?room=prod&name=mock&userId=mock`);
     assert.equal(events.status, 401);
   } finally {
     server.kill();
@@ -88,7 +90,7 @@ test("production API can require Discord proxy signatures", async () => {
     const baseUrl = `http://127.0.0.1:${port}`;
     await waitForHealth(baseUrl);
 
-    const config = await fetch(`${baseUrl}/.proxy/api/config`);
+    const config = await fetch(`${baseUrl}/api/config`);
     assert.equal(config.status, 401);
     assert.match(await config.text(), /proxy request verification failed/i);
   } finally {
@@ -122,7 +124,11 @@ test("Activity client serves the vendored Discord SDK without external CDN impor
     const response = await fetch(`${baseUrl}/vendor/discord-embedded-app-sdk/output/index.mjs`);
     assert.equal(response.status, 200);
     assert.match(response.headers.get("content-type") ?? "", /text\/javascript/);
+    assert.equal(response.headers.get("cache-control"), "no-store");
     assert.match(await response.text(), /DiscordSDK/);
+
+    const legacyConfig = await fetch(`${baseUrl}/.proxy/api/config`);
+    assert.equal(legacyConfig.status, 200);
   } finally {
     server.kill();
     await new Promise((resolve) => server.once("exit", resolve));

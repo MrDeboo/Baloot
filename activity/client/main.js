@@ -140,7 +140,7 @@ async function authenticate() {
   discordSdk = new DiscordSDK(config.clientId);
   await discordSdk.ready();
   roomId = discordSdk.instanceId || roomId;
-  apiPrefix = config.proxyPrefix || "/.proxy";
+  apiPrefix = typeof config.proxyPrefix === "string" ? config.proxyPrefix : "";
 
   const { code } = await discordSdk.commands.authorize({
     client_id: config.clientId,

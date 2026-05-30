@@ -79,11 +79,15 @@ are missing.
   sequence number.
 - If the engine rejects an action, disconnects, or times out, the existing
   engine forfeit behavior is preserved.
-- In Discord, the client uses the `/.proxy/api/*` path supported by the backend.
+- In Discord, the client uses same-origin `/api/*` paths through the Activity
+  URL mapping. The backend still accepts the older `/.proxy/api/*` form for
+  compatibility with existing local tests and older deployments.
 - The Embedded App SDK is loaded from the Activity's own static assets rather
   than from an external CDN.
 - In production mode, `/api/token` verifies the authenticated user is present in
   the Discord Activity instance before issuing an Activity session.
+- Non-HTML Activity assets are served with `Cache-Control: no-store` so Discord
+  clients do not hold stale JavaScript or CSS after a deploy.
 
 ## Useful Environment Variables
 

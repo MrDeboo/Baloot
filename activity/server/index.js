@@ -155,9 +155,10 @@ async function serveStatic(url, response) {
     const stat = await fs.stat(resolved);
     const file = stat.isDirectory() ? path.join(resolved, "index.html") : resolved;
     const data = await fs.readFile(file);
-    response.writeHead(200, {
-      "Content-Type": mimeTypes.get(path.extname(file)) ?? "application/octet-stream"
-    });
+    const contentType = mimeTypes.get(path.extname(file)) ?? "application/octet-stream";
+    const headers = { "Content-Type": contentType };
+    if (!contentType.startsWith("text/html")) headers["Cache-Control"] = "no-store";
+    response.writeHead(200, headers);
     response.end(data);
   } catch {
     const fallback = await fs.readFile(path.join(clientRoot, "index.html"));
@@ -199,7 +200,8 @@ const server = http.createServer(async (request, response) => {
         clientId: process.env.DISCORD_CLIENT_ID ?? "",
         publicUrl,
         allowInsecureDev,
-        proxyPrefix: "/.proxy",
+        proxyPrefix: "",
+        legacyProxyPrefix: "/.proxy",
         requiresActivityInstanceVerification: !allowInsecureDev || Boolean(discordBotToken),
         hasActivityInstanceVerifier: Boolean(discordBotToken),
         requiresProxyRequestSignature: !allowInsecureDev && Boolean(discordProxyPublicKey)

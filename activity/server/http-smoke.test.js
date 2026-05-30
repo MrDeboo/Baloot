@@ -109,7 +109,7 @@ function stopServer(server) {
 
 async function connectSse(baseUrl, params) {
   const controller = new AbortController();
-  const response = await fetch(`${baseUrl}/.proxy/api/events?${new URLSearchParams(params)}`, {
+  const response = await fetch(`${baseUrl}/api/events?${new URLSearchParams(params)}`, {
     signal: controller.signal
   });
   assert.equal(response.status, 200);
@@ -164,7 +164,7 @@ async function connectSse(baseUrl, params) {
 }
 
 function actionRequest(baseUrl, body) {
-  return fetch(`${baseUrl}/.proxy/api/action`, {
+  return fetch(`${baseUrl}/api/action`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body)
