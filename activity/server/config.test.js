@@ -65,3 +65,33 @@ test("production config rejects insecure mock users", async () => {
     await new Promise((resolve) => server.once("exit", resolve));
   }
 });
+
+test("production API can require Discord proxy signatures", async () => {
+  const port = await reservePort();
+  const server = spawn(process.execPath, ["activity/server/index.js"], {
+    cwd: repoRoot,
+    env: {
+      ...process.env,
+      ACTIVITY_PORT: String(port),
+      ACTIVITY_HOST: "127.0.0.1",
+      ACTIVITY_ALLOW_INSECURE_DEV: "0",
+      DISCORD_CLIENT_ID: "123",
+      DISCORD_CLIENT_SECRET: "secret",
+      DISCORD_BOT_TOKEN: "bot",
+      DISCORD_PROXY_PUBLIC_KEY: "0".repeat(64)
+    },
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+
+  try {
+    const baseUrl = `http://127.0.0.1:${port}`;
+    await waitForHealth(baseUrl);
+
+    const config = await fetch(`${baseUrl}/.proxy/api/config`);
+    assert.equal(config.status, 401);
+    assert.match(await config.text(), /proxy request verification failed/i);
+  } finally {
+    server.kill();
+    await new Promise((resolve) => server.once("exit", resolve));
+  }
+});

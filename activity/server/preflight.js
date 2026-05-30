@@ -34,6 +34,10 @@ function integerEnv(env, key, fallback) {
   return Number.isInteger(value) ? value : null;
 }
 
+function hasDiscordPublicKey(value) {
+  return !value || /^[0-9a-f]{64}$/i.test(String(value).trim());
+}
+
 export function validateActivityConfig(env = process.env, options = {}) {
   const errors = [];
   const warnings = [];
@@ -71,6 +75,10 @@ export function validateActivityConfig(env = process.env, options = {}) {
   }
 
   const publicUrl = parsePublicUrl(env.ACTIVITY_PUBLIC_URL ?? "");
+  const proxyPublicKey = env.DISCORD_PROXY_PUBLIC_KEY || env.DISCORD_APPLICATION_PUBLIC_KEY || "";
+  if (!hasDiscordPublicKey(proxyPublicKey)) {
+    errors.push("DISCORD_PROXY_PUBLIC_KEY must be a 64-character hex public key when set.");
+  }
   if (production) {
     for (const key of ["DISCORD_CLIENT_ID", "DISCORD_CLIENT_SECRET", "DISCORD_BOT_TOKEN"]) {
       if (!hasValue(env, key)) errors.push(`${key} is required when ACTIVITY_ALLOW_INSECURE_DEV is not 1.`);
@@ -85,6 +93,9 @@ export function validateActivityConfig(env = process.env, options = {}) {
       if (isLoopbackHost(publicUrl.hostname)) {
         errors.push("ACTIVITY_PUBLIC_URL cannot be localhost or loopback in production.");
       }
+    }
+    if (!proxyPublicKey) {
+      warnings.push("DISCORD_PROXY_PUBLIC_KEY is not set; Discord proxy request signature checks are disabled.");
     }
   } else {
     warnings.push("ACTIVITY_ALLOW_INSECURE_DEV=1 allows mock local users. Do not use this for Discord production.");

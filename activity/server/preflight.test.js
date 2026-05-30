@@ -53,6 +53,25 @@ test("preflight accepts complete production config", () => {
   assert.equal(report.config.engineBin, enginePath);
 });
 
+test("preflight rejects malformed Discord proxy public keys", () => {
+  const report = validateActivityConfig(
+    {
+      ACTIVITY_ALLOW_INSECURE_DEV: "0",
+      DISCORD_CLIENT_ID: "123",
+      DISCORD_CLIENT_SECRET: "secret",
+      DISCORD_BOT_TOKEN: "bot",
+      DISCORD_PROXY_PUBLIC_KEY: "not-hex",
+      ACTIVITY_SESSION_SECRET: "0123456789abcdef0123456789abcdef",
+      ACTIVITY_PUBLIC_URL: "https://activity.example.com",
+      BALOOT_SERVER_BIN: "../build/baloot-server"
+    },
+    { exists, cwd, repoRoot, nodeVersion: "24.0.0" }
+  );
+
+  assert.equal(report.ok, false);
+  assert.match(report.errors.join("\n"), /DISCORD_PROXY_PUBLIC_KEY/);
+});
+
 test("preflight allows local dev without Discord credentials but still requires engine", () => {
   const report = validateActivityConfig(
     {

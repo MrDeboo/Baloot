@@ -199,11 +199,13 @@ game. A fifth user in the same `room` joins as a spectator.
 For Discord deployment, configure an Activity URL mapping in the Discord
 Developer Portal and set `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`,
 `ACTIVITY_SESSION_SECRET`, `ACTIVITY_PUBLIC_URL`, `DISCORD_BOT_TOKEN`, and
-`ACTIVITY_ALLOW_INSECURE_DEV=0`. Run `node server/preflight.js` from `activity/`
-before deploying; it verifies the Discord credentials, public HTTPS URL, session
-secret, and engine binary path. Production sessions verify Discord Activity
-instance membership before users can join a room. See `activity/README.md` for
-details.
+`ACTIVITY_ALLOW_INSECURE_DEV=0`. You can also set
+`DISCORD_PROXY_PUBLIC_KEY` from the Developer Portal to require Discord proxy
+request signatures on Activity API calls. Run `node server/preflight.js` from
+`activity/` before deploying; it verifies the Discord credentials, public HTTPS
+URL, session secret, engine binary path, and proxy key format. Production
+sessions verify Discord Activity instance membership before users can join a
+room. See `activity/README.md` for details.
 
 ## Platform Notes
 

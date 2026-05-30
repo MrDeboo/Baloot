@@ -1,9 +1,9 @@
-import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { signSession, verifyDiscordProxyRequestHeaders, verifySession } from "./auth.js";
 import { ActivityHub } from "./room.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -15,6 +15,7 @@ const publicUrl = process.env.ACTIVITY_PUBLIC_URL ?? `http://127.0.0.1:${port}`;
 const sessionSecret = process.env.ACTIVITY_SESSION_SECRET ?? "local-dev-secret";
 const allowInsecureDev = process.env.ACTIVITY_ALLOW_INSECURE_DEV === "1";
 const discordBotToken = process.env.DISCORD_BOT_TOKEN ?? "";
+const discordProxyPublicKey = process.env.DISCORD_PROXY_PUBLIC_KEY || process.env.DISCORD_APPLICATION_PUBLIC_KEY || "";
 const hub = new ActivityHub();
 
 const mimeTypes = new Map([
@@ -53,36 +54,6 @@ function readBody(request) {
     });
     request.on("error", reject);
   });
-}
-
-function base64url(value) {
-  return Buffer.from(value).toString("base64url");
-}
-
-function signSession({ user, instanceId = "" }) {
-  const payload = JSON.stringify({
-    user,
-    instanceId,
-    exp: Math.floor(Date.now() / 1000) + 24 * 60 * 60
-  });
-  const encoded = base64url(payload);
-  const signature = crypto.createHmac("sha256", sessionSecret).update(encoded).digest("base64url");
-  return `${encoded}.${signature}`;
-}
-
-function verifySession(token) {
-  try {
-    if (!token || typeof token !== "string" || !token.includes(".")) return null;
-    const [encoded, signature] = token.split(".");
-    const expected = crypto.createHmac("sha256", sessionSecret).update(encoded).digest("base64url");
-    if (Buffer.byteLength(signature) !== Buffer.byteLength(expected)) return null;
-    if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
-    const payload = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8"));
-    if (!payload.exp || payload.exp < Math.floor(Date.now() / 1000)) return null;
-    return payload;
-  } catch {
-    return null;
-  }
 }
 
 async function verifyActivityInstance({ userId, instanceId }) {
@@ -156,7 +127,7 @@ async function exchangeDiscordToken(code) {
 
 function userFromRequest(url, body = {}) {
   const session = body.session ?? url.searchParams.get("session");
-  const sessionPayload = verifySession(session);
+  const sessionPayload = verifySession(session, { secret: sessionSecret });
   if (sessionPayload?.user) {
     return { user: sessionPayload.user, instanceId: sessionPayload.instanceId ?? "" };
   }
@@ -194,6 +165,16 @@ async function serveStatic(url, response) {
   }
 }
 
+function verifyProxyRequest(request, requestPath) {
+  if (allowInsecureDev || !discordProxyPublicKey || !requestPath.startsWith("/api/") || requestPath === "/api/health") {
+    return { verified: true, skipped: true };
+  }
+  return verifyDiscordProxyRequestHeaders(request.headers, {
+    publicKey: discordProxyPublicKey,
+    clientId: process.env.DISCORD_CLIENT_ID ?? ""
+  });
+}
+
 const server = http.createServer(async (request, response) => {
   const url = new URL(request.url, publicUrl);
   const requestPath = url.pathname.startsWith("/.proxy/")
@@ -201,6 +182,12 @@ const server = http.createServer(async (request, response) => {
     : url.pathname;
 
   try {
+    const proxy = verifyProxyRequest(request, requestPath);
+    if (!proxy.verified) {
+      json(response, 401, { error: "Discord proxy request verification failed.", reason: proxy.reason });
+      return;
+    }
+
     if (request.method === "GET" && requestPath === "/api/health") {
       json(response, 200, { ok: true });
       return;
@@ -213,7 +200,8 @@ const server = http.createServer(async (request, response) => {
         allowInsecureDev,
         proxyPrefix: "/.proxy",
         requiresActivityInstanceVerification: !allowInsecureDev || Boolean(discordBotToken),
-        hasActivityInstanceVerifier: Boolean(discordBotToken)
+        hasActivityInstanceVerifier: Boolean(discordBotToken),
+        requiresProxyRequestSignature: !allowInsecureDev && Boolean(discordProxyPublicKey)
       });
       return;
     }
@@ -233,7 +221,7 @@ const server = http.createServer(async (request, response) => {
       json(response, 200, {
         ...token,
         instance,
-        session: signSession({ user: token.user, instanceId })
+        session: signSession({ user: token.user, instanceId }, { secret: sessionSecret })
       });
       return;
     }

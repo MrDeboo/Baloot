@@ -281,7 +281,7 @@ export class ActivityRoom extends EventEmitter {
     };
     this.participants.set(user.id, participant);
     if (participant.role === "player") this.playersBySeat.set(participant.seat, user.id);
-    this.state.hands.set(participant.seat, []);
+    if (participant.seat) this.state.hands.set(participant.seat, []);
     this.broadcast();
     return participant;
   }

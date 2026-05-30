@@ -19,6 +19,7 @@ when the engine asks that seat for a move.
    DISCORD_CLIENT_ID=your_application_id
    DISCORD_CLIENT_SECRET=your_oauth_client_secret
    DISCORD_BOT_TOKEN=your_bot_token_for_instance_verification
+   DISCORD_PROXY_PUBLIC_KEY=your_application_public_key
    ACTIVITY_SESSION_SECRET=a-long-random-string
    ACTIVITY_PUBLIC_URL=https://your-activity-domain.example
    ```
@@ -57,8 +58,11 @@ player seats. A fifth browser joins as a spectator.
 For production, set `ACTIVITY_ALLOW_INSECURE_DEV=0`. In that mode,
 `DISCORD_BOT_TOKEN` is required: the backend verifies each authenticated user
 against Discord's Activity Instance API before issuing a session or seating the
-user in a room. `node server/preflight.js` fails if production Discord credentials,
-the public HTTPS URL, the session secret, or the C++ engine binary are missing.
+user in a room. If `DISCORD_PROXY_PUBLIC_KEY` is set to the application's public
+key from the Developer Portal, API requests must also include valid Discord
+proxy signature headers. `node server/preflight.js` fails if production Discord
+credentials, the public HTTPS URL, the session secret, or the C++ engine binary
+are missing.
 
 ## How It Uses The Engine
 
@@ -83,6 +87,10 @@ the public HTTPS URL, the session secret, or the C++ engine binary are missing.
 - `ACTIVITY_PUBLIC_URL`: public Activity origin.
 - `DISCORD_BOT_TOKEN`: required when `ACTIVITY_ALLOW_INSECURE_DEV=0`; enables
   Discord Activity Instance API verification for production sessions.
+- `DISCORD_PROXY_PUBLIC_KEY`: optional 64-character hex application public key.
+  When set outside local dev, the backend verifies Discord proxy request
+  signatures before serving Activity API calls. `DISCORD_APPLICATION_PUBLIC_KEY`
+  is accepted as an alias.
 - `BALOOT_SERVER_BIN`: path to `baloot-server`.
   Relative paths are resolved from the current working directory, the
   `activity/` folder, and the repository root so both `../build/baloot-server`
