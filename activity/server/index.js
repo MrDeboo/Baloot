@@ -18,6 +18,7 @@ const allowInsecureDev = process.env.ACTIVITY_ALLOW_INSECURE_DEV === "1";
 const discordBotToken = process.env.DISCORD_BOT_TOKEN ?? "";
 const discordProxyPublicKey = process.env.DISCORD_PROXY_PUBLIC_KEY || process.env.DISCORD_APPLICATION_PUBLIC_KEY || "";
 const activityAssetVersion = process.env.ACTIVITY_ASSET_VERSION || Date.now().toString(36);
+const discordApiBase = process.env.DISCORD_API_BASE_URL ?? "https://discord.com/api/v10";
 const hub = new ActivityHub({
   verifyPlayersReady: ({ roomId, userIds }) =>
     verifyActivityPlayers({ instanceId: roomId, userIds })
@@ -76,7 +77,7 @@ async function verifyActivityPlayers({ userIds, instanceId }) {
   }
 
   const response = await fetchDiscordApi(
-    `https://discord.com/api/applications/${clientId}/activity-instances/${instanceId}`,
+    `${discordApiBase}/applications/${clientId}/activity-instances/${instanceId}`,
     { headers: { Authorization: `Bot ${discordBotToken}` } }
   );
   if (!response.ok) {
@@ -112,7 +113,7 @@ async function exchangeDiscordToken(code) {
     throw new Error("DISCORD_CLIENT_ID and DISCORD_CLIENT_SECRET are required for Discord auth.");
   }
 
-  const tokenResponse = await fetchDiscordApi("https://discord.com/api/oauth2/token", {
+  const tokenResponse = await fetchDiscordApi(`${discordApiBase}/oauth2/token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -127,7 +128,7 @@ async function exchangeDiscordToken(code) {
   }
   const token = await tokenResponse.json();
 
-  const userResponse = await fetchDiscordApi("https://discord.com/api/users/@me", {
+  const userResponse = await fetchDiscordApi(`${discordApiBase}/users/@me`, {
     headers: { Authorization: `${token.token_type} ${token.access_token}` }
   });
   if (!userResponse.ok) {

@@ -114,7 +114,8 @@ are missing.
   `/api/action`.
 - Backend calls to Discord's OAuth, user, and Activity Instance APIs retry HTTP
   429 responses using Discord's `Retry-After`, `X-RateLimit-Reset-After`, or
-  `retry_after` values before surfacing a failure.
+  `retry_after` values before surfacing a failure. These calls use Discord's
+  versioned v10 API and include a Baloot `User-Agent` header.
 - Non-HTML Activity assets are served with `Cache-Control: no-store` so Discord
   clients do not hold stale JavaScript or CSS after a deploy.
 

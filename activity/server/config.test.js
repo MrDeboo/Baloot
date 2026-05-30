@@ -172,11 +172,14 @@ test("production API binds signed proxy users to Activity sessions", async () =>
 
 test("Activity client serves the vendored Discord SDK without external CDN imports", async () => {
   const main = await fs.readFile(path.join(repoRoot, "activity/client/main.js"), "utf8");
+  const serverSource = await fs.readFile(path.join(repoRoot, "activity/server/index.js"), "utf8");
   assert.doesNotMatch(main, /https:\/\/esm\.sh|https:\/\/cdn|unpkg\.com|jsdelivr\.net/);
   assert.match(main, /vendor\/discord-embedded-app-sdk\/output\/index\.mjs/);
   assert.match(main, /\bEvents\b/);
   assert.match(main, /getInstanceConnectedParticipants/);
   assert.match(main, /ACTIVITY_INSTANCE_PARTICIPANTS_UPDATE/);
+  assert.match(serverSource, /https:\/\/discord\.com\/api\/v10/);
+  assert.doesNotMatch(serverSource, /https:\/\/discord\.com\/api\/(?!v10)/);
 
   const port = await reservePort();
   const server = spawn(process.execPath, ["activity/server/index.js"], {

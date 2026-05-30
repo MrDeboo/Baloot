@@ -31,7 +31,28 @@ test("Discord API fetch retries 429s using Retry-After seconds", async () => {
   assert.equal(calls.length, 2);
   assert.deepEqual(delays, [125]);
   assert.equal(calls[0].url, "https://discord.com/api/example");
-  assert.equal(calls[0].options.headers.Authorization, "Bot token");
+  assert.equal(new Headers(calls[0].options.headers).get("authorization"), "Bot token");
+  assert.equal(
+    new Headers(calls[0].options.headers).get("user-agent"),
+    "DiscordBot (https://github.com/MrDeboo/Baloot, 1.0)"
+  );
+});
+
+test("Discord API fetch preserves a custom User-Agent", async () => {
+  const calls = [];
+  const response = await fetchDiscordApi(
+    "https://discord.com/api/example",
+    { headers: { "User-Agent": "DiscordBot (https://example.com, 9.9)" } },
+    {
+      fetchFn: async (url, options) => {
+        calls.push({ url, options });
+        return new Response("ok", { status: 200 });
+      }
+    }
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(new Headers(calls[0].options.headers).get("user-agent"), "DiscordBot (https://example.com, 9.9)");
 });
 
 test("Discord API fetch falls back to retry_after JSON body", async () => {
