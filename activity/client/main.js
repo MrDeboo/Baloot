@@ -268,6 +268,17 @@ function renderControls() {
   els.playControls.classList.toggle("hidden", !(isPlayerTurn && snapshot.currentTurn.kind === "PLAY_CARD"));
   if (isPlayerTurn && snapshot.currentTurn.kind === "BUY_CALL") syncBuyControls();
 
+  const declarations = snapshot.self.declarations ?? { ikkahCards: [], balootCards: [] };
+  const isPlayTurn = isPlayerTurn && snapshot.currentTurn.kind === "PLAY_CARD";
+  const ikkahAllowed = isPlayTurn && selectedCard && declarations.ikkahCards?.includes(selectedCard);
+  const balootAllowed = isPlayTurn && selectedCard && declarations.balootCards?.includes(selectedCard);
+  els.ikkahFlag.disabled = !ikkahAllowed;
+  els.balootFlag.disabled = !balootAllowed;
+  if (!ikkahAllowed) els.ikkahFlag.checked = false;
+  if (!balootAllowed) els.balootFlag.checked = false;
+  els.ikkahFlag.closest("label")?.classList.toggle("is-disabled", !ikkahAllowed);
+  els.balootFlag.closest("label")?.classList.toggle("is-disabled", !balootAllowed);
+
   const requiresTrump =
     isPlayerTurn &&
     snapshot.currentTurn.kind === "BUY_CALL" &&
@@ -358,8 +369,8 @@ els.actionForm.addEventListener("submit", async (event) => {
     body.trump = els.trumpSuit.value;
   } else {
     body.card = selectedCard;
-    body.ikkah = els.ikkahFlag.checked;
-    body.baloot = els.balootFlag.checked;
+    body.ikkah = els.ikkahFlag.checked && !els.ikkahFlag.disabled;
+    body.baloot = els.balootFlag.checked && !els.balootFlag.disabled;
     if (els.projectKind.value && els.projectCards.value) {
       body.projects = [{ project: els.projectKind.value, cards: els.projectCards.value }];
     }

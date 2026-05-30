@@ -301,6 +301,11 @@ h2 {
   align-items: center;
 }
 
+.play-controls label.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 select,
 input[type="text"] {
   min-height: 38px;

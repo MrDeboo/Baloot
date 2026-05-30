@@ -117,6 +117,12 @@ function normalizeProjects(value, hand) {
   });
 }
 
+function optionalBoolean(body, field) {
+  if (body[field] == null) return false;
+  if (typeof body[field] !== "boolean") throw new Error(`${field} must be a boolean.`);
+  return body[field];
+}
+
 export function defaultEngineBinaryCandidates(root = repoRoot) {
   return [
     path.resolve(root, "build/baloot-server"),
@@ -206,6 +212,7 @@ export class ActivityRoom extends EventEmitter {
     this.contractInfo = null;
     this.discussionLastRaiserTeam = null;
     this.pendingIkkahSeats = new Set();
+    this.balootHalfSeenSeats = new Set();
     this.projectClosedSeats = new Set();
     this.error = "";
     this.state = {
@@ -428,6 +435,10 @@ export class ActivityRoom extends EventEmitter {
       if (projects.length > 0 && this.projectClosedSeats.has(participant.seat)) {
         throw new Error("Projects must be declared before your first play.");
       }
+      const ikkah = optionalBoolean(body, "ikkah");
+      const baloot = optionalBoolean(body, "baloot");
+      this.validatePlayDeclarations(participant.seat, card, { ikkah, baloot });
+
       for (const project of projects) {
         actions.push({
           actor_id: participant.seat,
@@ -435,8 +446,8 @@ export class ActivityRoom extends EventEmitter {
           data: project
         });
       }
-      if (body.ikkah) actions.push({ actor_id: participant.seat, type: "IKKAH", data: {} });
-      if (body.baloot) actions.push({ actor_id: participant.seat, type: "BALOOT", data: {} });
+      if (ikkah) actions.push({ actor_id: participant.seat, type: "IKKAH", data: {} });
+      if (baloot) actions.push({ actor_id: participant.seat, type: "BALOOT", data: {} });
       actions.push({
         actor_id: participant.seat,
         type: "PLAY_CARD",
@@ -500,6 +511,7 @@ export class ActivityRoom extends EventEmitter {
         this.contractInfo = null;
         this.discussionLastRaiserTeam = null;
         this.pendingIkkahSeats.clear();
+        this.balootHalfSeenSeats.clear();
         this.projectClosedSeats.clear();
         this.state.log.push(`Game ${action.data.game} started`);
         break;
@@ -532,6 +544,7 @@ export class ActivityRoom extends EventEmitter {
           round: this.state.round,
           ikkah: this.pendingIkkahSeats.has(action.actor_id)
         });
+        this.rememberBalootHalf(action.actor_id, action.data.card);
         this.pendingIkkahSeats.delete(action.actor_id);
         this.projectClosedSeats.add(action.actor_id);
         this.state.log.push(`R${this.state.round} P${action.actor_id} played ${action.data.card}`);
@@ -757,6 +770,67 @@ export class ActivityRoom extends EventEmitter {
     return trumps;
   }
 
+  declarationCardsForSeat(seat, legalCards = this.legalCardsForSeat(seat)) {
+    return {
+      ikkahCards: this.ikkahCardsForSeat(seat, legalCards),
+      balootCards: this.balootCardsForSeat(seat, legalCards)
+    };
+  }
+
+  ikkahCardsForSeat(seat, legalCards) {
+    const contract = this.contractInfo;
+    if (!contract || contract.mode !== "HUKUM" || !contract.trump) return [];
+    if (this.activeTrickForTurn().length !== 0) return [];
+    return legalCards.filter((card) => {
+      const parsed = cardParts(card);
+      return parsed.suit !== contract.trump && this.isHighestRemainingSuitCard(seat, card);
+    });
+  }
+
+  balootCardsForSeat(seat, legalCards) {
+    const contract = this.contractInfo;
+    if (!contract || contract.mode !== "HUKUM" || !contract.trump || !this.balootHalfSeenSeats.has(seat)) {
+      return [];
+    }
+    return legalCards.filter((card) => {
+      const parsed = cardParts(card);
+      return parsed.suit === contract.trump && (parsed.rank === "K" || parsed.rank === "Q");
+    });
+  }
+
+  validatePlayDeclarations(seat, card, { ikkah, baloot }) {
+    if (ikkah && !this.ikkahCardsForSeat(seat, this.legalCardsForSeat(seat)).includes(card)) {
+      throw new Error("IKKAH requires a HUKUM trick lead with the highest remaining non-trump suit card.");
+    }
+    if (baloot && !this.balootCardsForSeat(seat, this.legalCardsForSeat(seat)).includes(card)) {
+      throw new Error("BALOOT must be declared on the second trump K/Q in HUKUM.");
+    }
+  }
+
+  isHighestRemainingSuitCard(seat, playedCard) {
+    const played = cardParts(playedCard);
+    const playedStrength = SUN_STRENGTH.get(played.rank) ?? 0;
+    for (const [otherSeat, hand] of this.state.hands) {
+      for (const card of hand) {
+        if (otherSeat === seat && card === played.code) continue;
+        const parsed = cardParts(card);
+        if (parsed.suit === played.suit && (SUN_STRENGTH.get(parsed.rank) ?? 0) > playedStrength) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  rememberBalootHalf(seat, card) {
+    const contract = this.contractInfo;
+    if (!contract || contract.mode !== "HUKUM" || !contract.trump) return;
+    const parsed = cardParts(card);
+    if (parsed.suit === contract.trump && (parsed.rank === "K" || parsed.rank === "Q")) {
+      this.balootHalfSeenSeats.add(seat);
+    }
+  }
+
   isTrump(card, contract) {
     return contract.mode === "HUKUM" && contract.trump && cardParts(card).suit === contract.trump;
   }
@@ -849,6 +923,10 @@ export class ActivityRoom extends EventEmitter {
       seat && this.currentTurn?.kind === "PLAY_CARD" && this.currentTurn.actorId === seat
         ? this.legalCardsForSeat(seat)
         : [];
+    const declarations =
+      seat && this.currentTurn?.kind === "PLAY_CARD" && this.currentTurn.actorId === seat
+        ? this.declarationCardsForSeat(seat, legalCards)
+        : { ikkahCards: [], balootCards: [] };
     return {
       roomId: this.id,
       status: this.status,
@@ -857,7 +935,8 @@ export class ActivityRoom extends EventEmitter {
         role: participant?.role ?? "spectator",
         seat,
         hand: seat ? this.state.hands.get(seat) ?? [] : [],
-        legalCards
+        legalCards,
+        declarations
       },
       players,
       spectators,

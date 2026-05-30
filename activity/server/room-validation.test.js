@@ -361,12 +361,20 @@ test("Activity room validates play cards and optional declarations", () => {
       }),
     /Project card QS is not in your hand/
   );
+  assert.throws(
+    () => room.submitAction("player-1", { kind: "PLAY_CARD", card: "AS", ikkah: "true" }),
+    /ikkah must be a boolean/
+  );
+  assert.throws(
+    () => room.submitAction("player-1", { kind: "PLAY_CARD", card: "AS", baloot: true }),
+    /BALOOT must be declared/
+  );
   assert.equal(sent.length, 0);
 
   room.submitAction("player-1", {
     kind: "PLAY_CARD",
     card: "as",
-    ikkah: true,
+    ikkah: false,
     baloot: false,
     projects: [{ project: "sira", cards: "10d jd qd" }]
   });
@@ -377,9 +385,99 @@ test("Activity room validates play cards and optional declarations", () => {
       seat: 1,
       actions: [
         { actor_id: 1, type: "STATE_PROJECT", data: { project: "SIRA", cards: "10D,JD,QD" } },
-        { actor_id: 1, type: "IKKAH", data: {} },
         { actor_id: 1, type: "PLAY_CARD", data: { card: "AS" } }
       ]
     }
   ]);
+});
+
+test("Activity room validates IKKAH declarations before the engine", () => {
+  let setup = makeRoom();
+  seedPlayingTrick(setup.room, {
+    hand: ["AH", "7S"],
+    contract: { mode: "SUN", trump: "", closed: false },
+    trick: []
+  });
+  assert.throws(
+    () => setup.room.submitAction("player-1", { kind: "PLAY_CARD", card: "AH", ikkah: true }),
+    /IKKAH requires/
+  );
+
+  setup = makeRoom();
+  seedPlayingTrick(setup.room, {
+    hand: ["AS", "7H"],
+    contract: { mode: "HUKUM", trump: "S", closed: false },
+    trick: []
+  });
+  assert.throws(
+    () => setup.room.submitAction("player-1", { kind: "PLAY_CARD", card: "AS", ikkah: true }),
+    /IKKAH requires/
+  );
+
+  setup = makeRoom();
+  seedPlayingTrick(setup.room, {
+    hand: ["KH", "7S"],
+    contract: { mode: "HUKUM", trump: "S", closed: false },
+    trick: []
+  });
+  setup.room.state.hands.set(2, ["AH"]);
+  assert.deepEqual(setup.room.snapshotFor("player-1").self.declarations.ikkahCards, []);
+  assert.throws(
+    () => setup.room.submitAction("player-1", { kind: "PLAY_CARD", card: "KH", ikkah: true }),
+    /highest remaining/
+  );
+
+  setup = makeRoom();
+  seedPlayingTrick(setup.room, {
+    hand: ["AH", "7S"],
+    contract: { mode: "HUKUM", trump: "S", closed: false },
+    trick: []
+  });
+  setup.room.state.hands.set(2, ["KH"]);
+  assert.deepEqual(setup.room.snapshotFor("player-1").self.declarations.ikkahCards, ["AH"]);
+  setup.room.submitAction("player-1", { kind: "PLAY_CARD", card: "AH", ikkah: true });
+  assert.deepEqual(setup.sent.at(-1).actions, [
+    { actor_id: 1, type: "IKKAH", data: {} },
+    { actor_id: 1, type: "PLAY_CARD", data: { card: "AH" } }
+  ]);
+});
+
+test("Activity room validates BALOOT declarations before the engine", () => {
+  let setup = makeRoom();
+  seedPlayingTrick(setup.room, {
+    hand: ["KS"],
+    contract: { mode: "HUKUM", trump: "S", closed: false },
+    trick: []
+  });
+  assert.deepEqual(setup.room.snapshotFor("player-1").self.declarations.balootCards, []);
+  assert.throws(
+    () => setup.room.submitAction("player-1", { kind: "PLAY_CARD", card: "KS", baloot: true }),
+    /second trump K\/Q/
+  );
+
+  setup = makeRoom();
+  seedPlayingTrick(setup.room, {
+    hand: ["QS"],
+    contract: { mode: "HUKUM", trump: "S", closed: false },
+    trick: []
+  });
+  setup.room.balootHalfSeenSeats.add(1);
+  assert.deepEqual(setup.room.snapshotFor("player-1").self.declarations.balootCards, ["QS"]);
+  setup.room.submitAction("player-1", { kind: "PLAY_CARD", card: "QS", baloot: true });
+  assert.deepEqual(setup.sent.at(-1).actions, [
+    { actor_id: 1, type: "BALOOT", data: {} },
+    { actor_id: 1, type: "PLAY_CARD", data: { card: "QS" } }
+  ]);
+
+  setup = makeRoom();
+  setup.room.contractInfo = { mode: "HUKUM", trump: "S", closed: false };
+  setup.room.state.hands.set(1, ["KS"]);
+  setup.room.applyPublicAction({ actor_id: 1, type: "PLAY_CARD", data: { card: "KS", round: "1" } });
+  assert.equal(setup.room.balootHalfSeenSeats.has(1), true);
+  setup.room.applyPublicAction({
+    actor_id: 0,
+    type: "NEW_GAME",
+    data: { game: "2", initiator: "1", nitwit: "2", cutter: "3", dealer: "4" }
+  });
+  assert.equal(setup.room.balootHalfSeenSeats.size, 0);
 });
