@@ -81,8 +81,27 @@ function cookieValue(request, name) {
   return "";
 }
 
-function sessionCookieHeader(session) {
-  const secure = new URL(publicUrl).protocol === "https:";
+function requestScheme(request) {
+  const forwardedProto = request.headers["x-forwarded-proto"];
+  const proto = Array.isArray(forwardedProto) ? forwardedProto[0] : forwardedProto;
+  if (typeof proto === "string" && proto.split(",")[0].trim().toLowerCase() === "https") {
+    return "https:";
+  }
+
+  const cfVisitor = request.headers["cf-visitor"];
+  const visitor = Array.isArray(cfVisitor) ? cfVisitor[0] : cfVisitor;
+  if (typeof visitor === "string") {
+    try {
+      if (JSON.parse(visitor).scheme === "https") return "https:";
+    } catch {
+      // Ignore malformed proxy metadata.
+    }
+  }
+  return new URL(publicUrl).protocol;
+}
+
+function sessionCookieHeaderForRequest(session, request) {
+  const secure = requestScheme(request) === "https:";
   const attributes = [
     `${sessionCookieName}=${encodeURIComponent(session)}`,
     "Path=/api",
@@ -332,7 +351,7 @@ const server = http.createServer(async (request, response) => {
         ...token,
         instance,
         session
-      }, { "Set-Cookie": sessionCookieHeader(session) });
+      }, { "Set-Cookie": sessionCookieHeaderForRequest(session, request) });
       return;
     }
 

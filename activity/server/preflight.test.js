@@ -53,6 +53,41 @@ test("preflight accepts complete production config", () => {
   assert.equal(report.config.engineBin, enginePath);
 });
 
+test("preflight supports Cloudflare Tunnel with loopback bind", () => {
+  const report = validateActivityConfig(
+    {
+      ACTIVITY_ALLOW_INSECURE_DEV: "0",
+      ACTIVITY_TUNNEL: "cloudflare",
+      ACTIVITY_HOST: "127.0.0.1",
+      DISCORD_CLIENT_ID: "123",
+      DISCORD_CLIENT_SECRET: "secret",
+      DISCORD_BOT_TOKEN: "bot",
+      ACTIVITY_SESSION_SECRET: "0123456789abcdef0123456789abcdef",
+      ACTIVITY_PUBLIC_URL: "https://baloot.example.com",
+      BALOOT_SERVER_BIN: "../build/baloot-server"
+    },
+    { exists, cwd, repoRoot, nodeVersion: "24.0.0" }
+  );
+
+  assert.equal(report.ok, true);
+  assert.equal(report.config.tunnel, "cloudflare");
+  assert.doesNotMatch(report.warnings.join("\n"), /containers usually need 0\.0\.0\.0/);
+});
+
+test("preflight rejects unknown tunnel providers", () => {
+  const report = validateActivityConfig(
+    {
+      ACTIVITY_ALLOW_INSECURE_DEV: "1",
+      ACTIVITY_TUNNEL: "other",
+      BALOOT_SERVER_BIN: "../build/baloot-server"
+    },
+    { exists, cwd, repoRoot, nodeVersion: "24.0.0" }
+  );
+
+  assert.equal(report.ok, false);
+  assert.match(report.errors.join("\n"), /ACTIVITY_TUNNEL/);
+});
+
 test("preflight rejects malformed Discord proxy public keys", () => {
   const report = validateActivityConfig(
     {

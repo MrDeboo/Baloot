@@ -38,6 +38,10 @@ function hasDiscordPublicKey(value) {
   return !value || /^[0-9a-f]{64}$/i.test(String(value).trim());
 }
 
+function tunnelProvider(env) {
+  return String(env.ACTIVITY_TUNNEL || "").trim().toLowerCase();
+}
+
 export function validateActivityConfig(env = process.env, options = {}) {
   const errors = [];
   const warnings = [];
@@ -47,9 +51,13 @@ export function validateActivityConfig(env = process.env, options = {}) {
   const exists = options.exists ?? fs.existsSync;
   const cwd = options.cwd ?? process.cwd();
   const root = options.repoRoot ?? repoRoot;
+  const tunnel = tunnelProvider(env);
 
   if (!Number.isInteger(nodeMajor) || nodeMajor < 20) {
     errors.push(`Node.js 20 or newer is required; current version is ${nodeVersion}.`);
+  }
+  if (tunnel && tunnel !== "cloudflare") {
+    errors.push("ACTIVITY_TUNNEL must be blank or cloudflare.");
   }
 
   const engineBin = resolveEngineBinary(env.BALOOT_SERVER_BIN, { exists, cwd, root });
@@ -101,7 +109,7 @@ export function validateActivityConfig(env = process.env, options = {}) {
     warnings.push("ACTIVITY_ALLOW_INSECURE_DEV=1 allows mock local users. Do not use this for Discord production.");
   }
 
-  if (production && env.ACTIVITY_HOST === "127.0.0.1") {
+  if (production && env.ACTIVITY_HOST === "127.0.0.1" && tunnel !== "cloudflare") {
     warnings.push("ACTIVITY_HOST=127.0.0.1 is fine behind a local reverse proxy, but containers usually need 0.0.0.0.");
   }
 
@@ -113,6 +121,7 @@ export function validateActivityConfig(env = process.env, options = {}) {
       production,
       engineBin,
       publicUrl: publicUrl?.toString() ?? "",
+      tunnel,
       port: port ?? null,
       targetScore: targetScore ?? null,
       readTimeoutMs: readTimeout ?? null,

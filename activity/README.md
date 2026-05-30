@@ -43,6 +43,7 @@ Useful Discord docs:
 - A built C++ engine binary, usually `../build/baloot-server` from this folder.
 - For production: Discord application credentials, a public HTTPS Activity URL,
   and a Developer Portal URL mapping.
+- Optional for tunnel testing: `cloudflared` on `PATH`.
 
 No npm packages are required at runtime. The browser SDK is vendored under
 `client/vendor/discord-embedded-app-sdk/`.
@@ -122,6 +123,85 @@ Open a fifth URL with the same `room` to verify spectator behavior.
 Local mock mode is intentionally insecure. Keep
 `ACTIVITY_ALLOW_INSECURE_DEV=1` only for local browser testing.
 
+## Cloudflare Tunnel
+
+Cloudflare Tunnel is the recommended way to test the Activity through Discord's
+proxy while the backend is still running on your machine. You do not need to
+open a router port or own a public IP. The tunnel creates a public HTTPS URL and
+forwards it to the local HTTP Activity server.
+
+Quick tunnel flow:
+
+1. Install `cloudflared`.
+2. Build the C++ engine.
+3. Configure `.env` with your Discord credentials and local origin:
+
+```sh
+ACTIVITY_ALLOW_INSECURE_DEV=0
+ACTIVITY_TUNNEL=cloudflare
+ACTIVITY_HOST=127.0.0.1
+ACTIVITY_PORT=3000
+BALOOT_SERVER_BIN=../build/baloot-server
+```
+
+4. Start the Activity backend:
+
+```sh
+node server/start.js
+```
+
+5. In a second terminal, start the tunnel:
+
+```sh
+node server/cloudflare-tunnel.js
+```
+
+This wraps the same Cloudflare command Discord shows in its docs:
+
+```sh
+cloudflared tunnel --url http://localhost:3000
+```
+
+When Cloudflare prints a URL like:
+
+```text
+https://funky-jogging-bunny.trycloudflare.com
+```
+
+set:
+
+```sh
+ACTIVITY_PUBLIC_URL=https://funky-jogging-bunny.trycloudflare.com
+```
+
+Then restart `node server/start.js` so the server uses the public HTTPS origin
+for secure Activity cookies and readiness checks.
+
+In the Discord Developer Portal, set the Activity URL Mapping prefix `/` to the
+tunnel host without the protocol:
+
+```text
+funky-jogging-bunny.trycloudflare.com
+```
+
+Do not enable Application URL Override for this proxy-through-Discord flow.
+
+Run:
+
+```sh
+node server/deploy-check.js --url "$ACTIVITY_PUBLIC_URL"
+node server/readiness.js
+```
+
+If you enabled `DISCORD_PROXY_PUBLIC_KEY`, use `--allow-signed-api` with the
+deploy/readiness checks because direct requests to `/api/config` should fail
+without Discord's signed proxy headers.
+
+Quick Tunnel hostnames are temporary and can be claimed by someone else after
+you stop using them. Remove or reset the Discord URL mapping when you are done.
+For anything beyond short local testing, use a named Cloudflare Tunnel on a
+domain you control and set `ACTIVITY_PUBLIC_URL` to that stable HTTPS origin.
+
 ## Discord Setup
 
 1. Create a Discord application.
@@ -149,6 +229,9 @@ Recommended:
 DISCORD_PROXY_PUBLIC_KEY=your_application_public_key
 ACTIVITY_HOST=0.0.0.0
 ```
+
+Use `ACTIVITY_HOST=127.0.0.1` instead when `cloudflared` is running on the same
+machine as the Activity backend.
 
 `DISCORD_PROXY_PUBLIC_KEY` enables optional Discord proxy request signature
 verification on Activity API requests.
@@ -208,6 +291,10 @@ API.
 - `ACTIVITY_PORT`: HTTP port. Default `3000`.
 - `ACTIVITY_ALLOW_INSECURE_DEV`: `1` enables local mock users; use `0` in
   production.
+- `ACTIVITY_TUNNEL`: optional tunnel provider hint. Set `cloudflare` when using
+  Cloudflare Tunnel so preflight treats `ACTIVITY_HOST=127.0.0.1` as expected.
+- `ACTIVITY_TUNNEL_ORIGIN_URL`: optional local origin for
+  `server/cloudflare-tunnel.js`; defaults to `http://<ACTIVITY_HOST>:<ACTIVITY_PORT>`.
 - `ACTIVITY_ASSET_VERSION`: optional JS/CSS cache-busting value. If omitted, the
   server generates one at startup.
 - `ACTIVITY_DISCONNECT_GRACE_MS`: reconnect grace period for seated in-match
@@ -223,6 +310,8 @@ API.
 
 - `npm run dev`: load `.env`, force local mock mode if unset, start the server.
 - `npm start`: load `.env` and start the server.
+- `npm run tunnel:cloudflare`: start a Cloudflare Quick Tunnel to the local
+  Activity backend. Equivalent direct command: `node server/cloudflare-tunnel.js`.
 - `npm run preflight`: validate local runtime configuration.
 - `npm run verify:deploy -- --url <url>`: verify public HTML, assets, SDK, API
   health, cache headers, and production flags.
@@ -279,6 +368,12 @@ The test suite covers:
   points to a built executable for the current OS.
 - Stale JS/CSS after deploy: set `ACTIVITY_ASSET_VERSION` to a new value or
   restart the backend so it injects a fresh generated value.
+- Cloudflare tunnel opens but Discord still shows the old app: update the
+  Developer Portal URL Mapping to the current tunnel host and restart the
+  Activity backend after setting `ACTIVITY_PUBLIC_URL`.
+- Cloudflare tunnel says it cannot connect to origin: make sure
+  `node server/start.js` is running and the tunnel URL points at the same
+  `ACTIVITY_HOST` and `ACTIVITY_PORT`.
 
 ## Security Notes
 

@@ -198,6 +198,20 @@ http://127.0.0.1:3000/?mock=1&room=dev&name=Player-1
 Open four browser profiles or tabs with different `name` values to start a
 game. A fifth user in the same `room` joins as a spectator.
 
+For Discord testing without a public IP, run the backend locally and expose it
+through Cloudflare Tunnel:
+
+```sh
+cd activity
+node server/start.js
+node server/cloudflare-tunnel.js
+```
+
+Set `ACTIVITY_PUBLIC_URL` to the generated `https://*.trycloudflare.com` URL,
+restart the Activity backend, and map `/` in the Discord Developer Portal to
+the tunnel hostname without `https://`. See `activity/README.md` for the full
+Cloudflare Tunnel runbook.
+
 For Discord deployment, configure an Activity URL mapping in the Discord
 Developer Portal and set `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`,
 `ACTIVITY_SESSION_SECRET`, `ACTIVITY_PUBLIC_URL`, `DISCORD_BOT_TOKEN`, and

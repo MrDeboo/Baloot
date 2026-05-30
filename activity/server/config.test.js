@@ -155,7 +155,6 @@ test("production token exchange sets an Activity session cookie", async () => {
       DISCORD_CLIENT_SECRET: "secret",
       DISCORD_BOT_TOKEN: "bot",
       DISCORD_API_BASE_URL: discord.baseUrl,
-      ACTIVITY_PUBLIC_URL: "https://123.discordsays.com",
       ACTIVITY_SESSION_SECRET: "0123456789abcdef0123456789abcdef"
     },
     stdio: ["ignore", "pipe", "pipe"]
@@ -167,7 +166,7 @@ test("production token exchange sets an Activity session cookie", async () => {
 
     const token = await fetch(`${baseUrl}/api/token`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "X-Forwarded-Proto": "https" },
       body: JSON.stringify({ code: "code-1", instanceId: "instance-1" })
     });
     assert.equal(token.status, 200);
