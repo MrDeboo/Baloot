@@ -174,7 +174,8 @@ export class ActivityHub {
       engineBin: options.engineBin ?? resolveEngineBinary(process.env.BALOOT_SERVER_BIN),
       targetScore: Number(options.targetScore ?? process.env.BALOOT_TARGET_SCORE ?? 152),
       readTimeoutMs: Number(options.readTimeoutMs ?? process.env.BALOOT_READ_TIMEOUT_MS ?? 900000),
-      disconnectGraceMs: Number(options.disconnectGraceMs ?? process.env.ACTIVITY_DISCONNECT_GRACE_MS ?? 10000)
+      disconnectGraceMs: Number(options.disconnectGraceMs ?? process.env.ACTIVITY_DISCONNECT_GRACE_MS ?? 10000),
+      verifyPlayersReady: options.verifyPlayersReady
     };
     this.rooms = new Map();
   }
@@ -205,6 +206,7 @@ export class ActivityRoom extends EventEmitter {
     this.clients = new Set();
     this.closed = false;
     this.engine = null;
+    this.startPromise = null;
     this.playersBySeat = new Map();
     this.disconnectTimers = new Map();
     this.publicActionKeys = new Set();
@@ -352,21 +354,45 @@ export class ActivityRoom extends EventEmitter {
   maybeStart() {
     this.pruneLobbyDisconnects();
     const seatedPlayers = this.connectedPlayers();
-    if (this.status !== "lobby" || seatedPlayers.length !== 4) return;
-    this.startMatch().catch((error) => {
-      this.status = "error";
-      this.error = error.message;
-      this.broadcast();
-    });
+    if (this.status !== "lobby" || seatedPlayers.length !== 4 || this.startPromise) return;
+    this.startPromise = this.startMatch(seatedPlayers)
+      .catch((error) => {
+        this.status = "error";
+        this.error = error.message;
+        this.broadcast();
+      })
+      .finally(() => {
+        this.startPromise = null;
+      });
   }
 
-  async startMatch() {
+  async startMatch(expectedPlayers = this.connectedPlayers()) {
+    await this.verifyPlayersReady(expectedPlayers);
+    if (this.closed || this.status !== "lobby") return;
+
+    const seatedPlayers = this.connectedPlayers();
+    const samePlayers =
+      seatedPlayers.length === 4 &&
+      expectedPlayers.every((participant, index) => seatedPlayers[index]?.user.id === participant.user.id);
+    if (!samePlayers) return;
+
     this.status = "starting";
     this.broadcast();
     this.engine = new EngineMatch(this, this.options);
     await this.engine.start();
     this.status = "playing";
     this.broadcast();
+  }
+
+  async verifyPlayersReady(players) {
+    if (typeof this.options.verifyPlayersReady !== "function") return;
+    const result = await this.options.verifyPlayersReady({
+      roomId: this.id,
+      userIds: players.map((participant) => participant.user.id)
+    });
+    if (result === false || result?.verified === false) {
+      throw new Error(`Discord Activity instance verification failed: ${result?.reason || "players are not connected"}.`);
+    }
   }
 
   connectedPlayers() {

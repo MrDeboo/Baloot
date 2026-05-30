@@ -175,6 +175,31 @@ test("Activity starts only with four players and makes extras spectators", { ski
   }
 });
 
+test("Activity start is gated by the Discord instance participant verifier", async () => {
+  const verifierCalls = [];
+  const hub = new ActivityHub({
+    engineBin: "/missing-baloot-server",
+    verifyPlayersReady: async (details) => {
+      verifierCalls.push(details);
+      return { verified: false, reason: "not all seated users are still in the Activity instance" };
+    }
+  });
+  const room = hub.getRoom(`verify-${Date.now()}`);
+
+  try {
+    const players = [1, 2, 3, 4].map((seat) => connect(room, `player-${seat}`));
+    const error = await waitFor(() => latest(players[0])?.status === "error" && latest(players[0]));
+
+    assert.equal(room.engine, null);
+    assert.match(error.error, /Activity instance verification failed/i);
+    assert.equal(verifierCalls.length, 1);
+    assert.equal(verifierCalls[0].roomId, room.id);
+    assert.deepEqual(verifierCalls[0].userIds, ["player-1", "player-2", "player-3", "player-4"]);
+  } finally {
+    hub.closeAll();
+  }
+});
+
 test("Activity can complete a real-engine match from four player-submitted actions", { skip: !engineBin }, async () => {
   const hub = new ActivityHub({ engineBin, targetScore: 1, readTimeoutMs: 900000 });
   const room = hub.getRoom(`full-match-${Date.now()}`);

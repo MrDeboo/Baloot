@@ -107,6 +107,8 @@ are missing.
   backend-seated players and spectators.
 - In production mode, `/api/token` verifies the authenticated user is present in
   the Discord Activity instance before issuing an Activity session.
+- Before spawning the engine, the backend rechecks that all four seated players
+  are still present in the same Discord Activity instance.
 - When proxy request signatures are enabled, signed Discord proxy user context is
   bound to the Activity session user for `/api/token`, `/api/events`, and
   `/api/action`.

@@ -18,7 +18,10 @@ const allowInsecureDev = process.env.ACTIVITY_ALLOW_INSECURE_DEV === "1";
 const discordBotToken = process.env.DISCORD_BOT_TOKEN ?? "";
 const discordProxyPublicKey = process.env.DISCORD_PROXY_PUBLIC_KEY || process.env.DISCORD_APPLICATION_PUBLIC_KEY || "";
 const activityAssetVersion = process.env.ACTIVITY_ASSET_VERSION || Date.now().toString(36);
-const hub = new ActivityHub();
+const hub = new ActivityHub({
+  verifyPlayersReady: ({ roomId, userIds }) =>
+    verifyActivityPlayers({ instanceId: roomId, userIds })
+});
 
 const mimeTypes = new Map([
   [".html", "text/html; charset=utf-8"],
@@ -59,7 +62,7 @@ function readBody(request) {
   });
 }
 
-async function verifyActivityInstance({ userId, instanceId }) {
+async function verifyActivityPlayers({ userIds, instanceId }) {
   if (!discordBotToken) {
     return {
       verified: allowInsecureDev,
@@ -80,10 +83,25 @@ async function verifyActivityInstance({ userId, instanceId }) {
     return { verified: false, skipped: false, reason: `Discord returned ${response.status}` };
   }
   const instance = await response.json();
+  const users = Array.isArray(instance.users) ? instance.users.map(String) : [];
+  const missing = userIds.map(String).filter((userId) => !users.includes(userId));
   return {
-    verified: Array.isArray(instance.users) && instance.users.includes(userId),
+    verified: missing.length === 0,
     skipped: false,
-    reason: "verified with Discord Activity Instance API"
+    reason: missing.length
+      ? `missing Activity instance users: ${missing.join(", ")}`
+      : "verified with Discord Activity Instance API",
+    users,
+    missing
+  };
+}
+
+async function verifyActivityInstance({ userId, instanceId }) {
+  const result = await verifyActivityPlayers({ userIds: [userId], instanceId });
+  return {
+    verified: result.verified,
+    skipped: result.skipped,
+    reason: result.reason
   };
 }
 
