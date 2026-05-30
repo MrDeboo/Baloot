@@ -16,6 +16,7 @@ const sessionSecret = process.env.ACTIVITY_SESSION_SECRET ?? "local-dev-secret";
 const allowInsecureDev = process.env.ACTIVITY_ALLOW_INSECURE_DEV === "1";
 const discordBotToken = process.env.DISCORD_BOT_TOKEN ?? "";
 const discordProxyPublicKey = process.env.DISCORD_PROXY_PUBLIC_KEY || process.env.DISCORD_APPLICATION_PUBLIC_KEY || "";
+const activityAssetVersion = process.env.ACTIVITY_ASSET_VERSION || Date.now().toString(36);
 const hub = new ActivityHub();
 
 const mimeTypes = new Map([
@@ -154,14 +155,23 @@ async function serveStatic(url, response) {
   try {
     const stat = await fs.stat(resolved);
     const file = stat.isDirectory() ? path.join(resolved, "index.html") : resolved;
-    const data = await fs.readFile(file);
+    let data = await fs.readFile(file);
     const contentType = mimeTypes.get(path.extname(file)) ?? "application/octet-stream";
     const headers = { "Content-Type": contentType };
     if (!contentType.startsWith("text/html")) headers["Cache-Control"] = "no-store";
+    if (contentType.startsWith("text/html")) {
+      data = Buffer.from(
+        data.toString("utf8").replaceAll("%ACTIVITY_ASSET_VERSION%", encodeURIComponent(activityAssetVersion)),
+        "utf8"
+      );
+    }
     response.writeHead(200, headers);
     response.end(data);
   } catch {
-    const fallback = await fs.readFile(path.join(clientRoot, "index.html"));
+    const fallback = (await fs.readFile(path.join(clientRoot, "index.html"), "utf8")).replaceAll(
+      "%ACTIVITY_ASSET_VERSION%",
+      encodeURIComponent(activityAssetVersion)
+    );
     response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
     response.end(fallback);
   }

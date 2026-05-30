@@ -112,7 +112,8 @@ test("Activity client serves the vendored Discord SDK without external CDN impor
       ACTIVITY_PORT: String(port),
       ACTIVITY_HOST: "127.0.0.1",
       ACTIVITY_ALLOW_INSECURE_DEV: "1",
-      BALOOT_SERVER_BIN: "build/baloot-server"
+      BALOOT_SERVER_BIN: "build/baloot-server",
+      ACTIVITY_ASSET_VERSION: "config-test-version"
     },
     stdio: ["ignore", "pipe", "pipe"]
   });
@@ -120,6 +121,11 @@ test("Activity client serves the vendored Discord SDK without external CDN impor
   try {
     const baseUrl = `http://127.0.0.1:${port}`;
     await waitForHealth(baseUrl);
+
+    const html = await fetch(`${baseUrl}/`).then((response) => response.text());
+    assert.match(html, /main\.js\?v=config-test-version/);
+    assert.match(html, /styles\.css\?v=config-test-version/);
+    assert.doesNotMatch(html, /%ACTIVITY_ASSET_VERSION%/);
 
     const response = await fetch(`${baseUrl}/vendor/discord-embedded-app-sdk/output/index.mjs`);
     assert.equal(response.status, 200);

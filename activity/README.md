@@ -43,6 +43,21 @@ not need an extra external CDN URL mapping for the SDK import.
    node server/start.js
    ```
 
+6. After the backend is reachable through the public URL mapping, verify the
+   deployed Activity surface:
+
+   ```sh
+   node server/deploy-check.js --url "$ACTIVITY_PUBLIC_URL"
+   ```
+
+   If you enabled Discord proxy request signature checks, direct requests to
+   `/api/config` are expected to fail without Discord's signed proxy headers.
+   In that case, run:
+
+   ```sh
+   node server/deploy-check.js --url "$ACTIVITY_PUBLIC_URL" --allow-signed-api
+   ```
+
 Local development can run without Discord OAuth by leaving
 `ACTIVITY_ALLOW_INSECURE_DEV=1` and opening:
 
@@ -111,6 +126,9 @@ are missing.
   during a match, default `10000`. If the player does not reconnect before the
   grace expires, the Activity closes that player's engine proxy seat and the
   engine resolves the match as a forfeit. No bot action is generated.
+- `ACTIVITY_ASSET_VERSION`: optional cache-busting value injected into
+  `main.js` and `styles.css` URLs. If omitted, the backend generates a new value
+  when it starts.
 - `ACTIVITY_ALLOW_INSECURE_DEV`: set `1` for mock local users.
   Set `0` in production; production sessions require `DISCORD_BOT_TOKEN`.
 
@@ -120,8 +138,12 @@ are missing.
   users, and starts the Activity backend.
 - `node server/preflight.js`: loads `activity/.env` if it exists and validates the
   Discord/engine configuration without starting a server.
+- `node server/deploy-check.js --url <public-url>`: checks the served Activity
+  HTML, static assets, SDK bundle, API health, canonical `/api/*` routes, cache
+  headers, and production config flags for a deployed URL.
 - `node server/start.js`: loads `activity/.env` if it exists and starts the backend.
 - `node --test server/*.test.js`: runs the Activity server tests.
 
 The same commands are also exposed as npm scripts (`npm run dev`,
-`npm run preflight`, `npm start`, `npm test`) when npm is available.
+`npm run preflight`, `npm run verify:deploy`, `npm start`, `npm test`) when npm
+is available.

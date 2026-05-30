@@ -205,9 +205,12 @@ Developer Portal and set `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`,
 `DISCORD_PROXY_PUBLIC_KEY` from the Developer Portal to require Discord proxy
 request signatures on Activity API calls. Run `node server/preflight.js` from
 `activity/` before deploying; it verifies the Discord credentials, public HTTPS
-URL, session secret, engine binary path, and proxy key format. Production
-sessions verify Discord Activity instance membership before users can join a
-room. See `activity/README.md` for details.
+URL, session secret, engine binary path, and proxy key format. After the URL
+mapping is live, run `node server/deploy-check.js --url "$ACTIVITY_PUBLIC_URL"`
+to verify the served Activity HTML, cache-busted JS/CSS, SDK asset, API health,
+and production config flags. Production sessions verify Discord Activity
+instance membership before users can join a room. See `activity/README.md` for
+details.
 
 ## Platform Notes
 
@@ -403,3 +406,6 @@ Those tests include a real-engine smoke check for the Discord Activity bridge:
 three connected users stay in the lobby, the fourth starts the C++ engine, a
 fifth user becomes a spectator, and a submitted player bid advances the engine
 turn.
+
+The Activity test suite also includes an HTTP/SSE smoke check that drives the
+same `/api/events` and `/api/action` paths used by the Discord client.
