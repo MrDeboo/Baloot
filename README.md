@@ -94,6 +94,13 @@ For long-running lobby mode, use `--matches 0`. The server stops accepting new
 lobby clients on SIGINT/SIGTERM, notifies unmatched lobby clients, waits for
 active matches to finish, and exits.
 
+## Visualizer
+
+Open `visualizer/index.html` in a browser to replay a full Baloot match log.
+The visualizer accepts output from `baloot-server` or `baloot-local-smoke`,
+shows each game, trick, card play, winner, and score transition, and includes a
+sample replay by default.
+
 ## Config
 
 Flags:

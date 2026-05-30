@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Baloot Visualizer</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">32</div>
+          <div>
+            <h1>Baloot Visualizer</h1>
+            <p id="matchSubtitle">Replay loaded from Baloot match logs</p>
+          </div>
+        </div>
+        <div class="top-actions">
+          <label class="button file-button" for="fileInput">
+            <input id="fileInput" type="file" accept=".log,.txt,text/plain">
+            Import log
+          </label>
+          <button id="loadSample" class="button" type="button">Sample</button>
+          <button id="clearLog" class="button button-quiet" type="button">Clear</button>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <section class="panel log-panel" aria-labelledby="logTitle">
+          <div class="panel-heading">
+            <h2 id="logTitle">Match Log</h2>
+            <span id="parseStatus" class="status-pill">Ready</span>
+          </div>
+          <textarea id="logInput" spellcheck="false" aria-label="Match log input"></textarea>
+          <button id="loadLog" class="button button-primary" type="button">Load Replay</button>
+        </section>
+
+        <section class="replay-stage" aria-label="Replay stage">
+          <section class="score-strip" aria-label="Score">
+            <div class="score-team score-team-a">
+              <span class="score-label">Team A</span>
+              <strong id="scoreA">0</strong>
+            </div>
+            <div class="match-state">
+              <span id="stepCounter">Step 0 / 0</span>
+              <strong id="eventTitle">No replay loaded</strong>
+              <span id="eventDetail">Load a log to begin</span>
+            </div>
+            <div class="score-team score-team-b">
+              <span class="score-label">Team B</span>
+              <strong id="scoreB">0</strong>
+            </div>
+          </section>
+
+          <section class="table-wrap" aria-label="Game table">
+            <div class="felt-table">
+              <div id="seatTop" class="seat seat-top"></div>
+              <div id="seatLeft" class="seat seat-left"></div>
+              <div id="seatRight" class="seat seat-right"></div>
+              <div id="seatBottom" class="seat seat-bottom"></div>
+
+              <div class="table-center">
+                <div class="contract-panel">
+                  <span id="gameLabel">Game -</span>
+                  <strong id="contractLabel">No contract</strong>
+                  <span id="middleLabel">Middle -</span>
+                </div>
+                <div id="trickCards" class="trick-cards" aria-label="Current trick"></div>
+                <div id="roundLabel" class="round-label">Round -</div>
+              </div>
+            </div>
+          </section>
+
+          <section class="controls" aria-label="Replay controls">
+            <button id="firstStep" class="icon-button" type="button" aria-label="First step">&lt;&lt;</button>
+            <button id="prevStep" class="icon-button" type="button" aria-label="Previous step">&lt;</button>
+            <button id="playPause" class="icon-button play-toggle" type="button" aria-label="Play replay">Play</button>
+            <button id="nextStep" class="icon-button" type="button" aria-label="Next step">&gt;</button>
+            <button id="lastStep" class="icon-button" type="button" aria-label="Last step">&gt;&gt;</button>
+            <input id="stepRange" type="range" min="0" max="0" value="0" aria-label="Replay position">
+            <label class="speed-select">
+              Speed
+              <select id="speedSelect">
+                <option value="1500">1x</option>
+                <option value="850" selected>2x</option>
+                <option value="450">4x</option>
+                <option value="220">8x</option>
+              </select>
+            </label>
+          </section>
+        </section>
+
+        <aside class="panel timeline-panel" aria-labelledby="timelineTitle">
+          <div class="panel-heading">
+            <h2 id="timelineTitle">Timeline</h2>
+            <span id="summaryStats" class="status-pill">0 events</span>
+          </div>
+          <div id="gameNav" class="game-nav" aria-label="Games"></div>
+          <div id="scoreTimeline" class="score-timeline" aria-label="Score timeline"></div>
+          <div id="eventList" class="event-list" aria-label="Events"></div>
+        </aside>
+      </main>
+    </div>
+
+    <script defer src="./app.js"></script>
+  </body>
+</html>
