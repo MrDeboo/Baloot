@@ -158,6 +158,11 @@ export class TurnTracker {
       if (kind === BUY.ENFORCE_SUN) {
         this.contract.mode = "SUN";
         this.contract.trump = "";
+        this.phase = PHASE.DISCUSSION;
+        this.discussionQueue = [...this.seats].reverse().filter((id) => id !== action.actor_id);
+        return this.discussionQueue[0] === this.selfId
+          ? this.prompt("BUY_CALL", { phase: "discussion" })
+          : null;
       } else if (action.data.trump) {
         this.contract.mode = "HUKUM";
         this.contract.trump = action.data.trump;

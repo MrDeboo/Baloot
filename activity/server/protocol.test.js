@@ -45,3 +45,21 @@ test("turn tracker advances to next card player", () => {
   const prompt = p2.observe([{ actor_id: 1, type: "PLAY_CARD", data: { round: "1", card: "AS" } }]);
   assert.deepEqual(prompt, { actorId: 2, kind: "PLAY_CARD", round: 1 });
 });
+
+test("turn tracker reopens discussion after enforcing Hukum to Sun", () => {
+  const p4 = new TurnTracker(4);
+  p4.observe([
+    { actor_id: 0, type: "NEW_GAME", data: { game: "1", initiator: "1", nitwit: "2", cutter: "3", dealer: "4" } },
+    { actor_id: 0, type: "MIDDLE_CARD", data: { card: "10C" } },
+    { actor_id: 1, type: "BUY_CALL", data: { call: "HUKUM", phase: "1", trump: "C" } },
+    { actor_id: 4, type: "BUY_CALL", data: { call: "BAS", phase: "discussion", trump: "" } },
+    { actor_id: 3, type: "BUY_CALL", data: { call: "BAS", phase: "discussion", trump: "" } },
+    { actor_id: 2, type: "BUY_CALL", data: { call: "BAS", phase: "discussion", trump: "" } }
+  ]);
+
+  const prompt = p4.observe([
+    { actor_id: 1, type: "BUY_CALL", data: { call: "ENFORCE_SUN", phase: "enforce", trump: "" } }
+  ]);
+
+  assert.deepEqual(prompt, { actorId: 4, kind: "BUY_CALL", phase: "discussion" });
+});

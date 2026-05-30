@@ -13,6 +13,20 @@ const repoRoot = path.resolve(__dirname, "../..");
 const VALID_BUY_CALLS = new Set(BUY_CALLS);
 const VALID_SUITS = new Set(["C", "D", "H", "S"]);
 const VALID_PROJECTS = new Set(["SIRA", "FIFTY", "HUNDRED", "FOUR_HUNDRED"]);
+const BID_PHASE_CALLS = new Set(["BAS", "SUN", "HUKUM", "ASHKAL"]);
+const DISCUSSION_CALLS = new Set([
+  "BAS",
+  "GABLAK_SUN",
+  "GABLAK_ASHKAL",
+  "BET_OPEN",
+  "BET_CLOSE",
+  "BET_DOUBLE",
+  "BET_TRIPLE",
+  "BET_QUADRUPLE",
+  "GAHWA"
+]);
+const BET_CALLS = new Set(["BET_OPEN", "BET_CLOSE", "BET_DOUBLE", "BET_TRIPLE", "BET_QUADRUPLE", "GAHWA"]);
+const ENFORCE_CALLS = new Set(["BAS", "ENFORCE_SUN", "ENFORCE_HUKUM"]);
 const CARD_PATTERN = /^(?:7|8|9|10|J|Q|K|A)[CDHS]$/;
 const SUN_STRENGTH = new Map([
   ["A", 8],
@@ -173,6 +187,7 @@ export class ActivityRoom extends EventEmitter {
     this.publicActionKeys = new Set();
     this.currentTurn = null;
     this.contractInfo = null;
+    this.discussionLastRaiserTeam = null;
     this.pendingIkkahSeats = new Set();
     this.projectClosedSeats = new Set();
     this.error = "";
@@ -327,7 +342,9 @@ export class ActivityRoom extends EventEmitter {
 
     const actions = [];
     if (kind === "BUY_CALL") {
-      actions.push({ actor_id: participant.seat, type: "BUY_CALL", data: normalizeBuyCall(body) });
+      const data = normalizeBuyCall(body);
+      this.validateBuyCall(participant.seat, data);
+      actions.push({ actor_id: participant.seat, type: "BUY_CALL", data });
     } else if (kind === "PLAY_CARD") {
       const hand = this.state.hands.get(participant.seat) ?? [];
       const card = normalizeCard(body.card, "PLAY_CARD card");
@@ -411,6 +428,7 @@ export class ActivityRoom extends EventEmitter {
         this.state.round = 0;
         this.state.trick = [];
         this.contractInfo = null;
+        this.discussionLastRaiserTeam = null;
         this.pendingIkkahSeats.clear();
         this.projectClosedSeats.clear();
         this.state.log.push(`Game ${action.data.game} started`);
@@ -470,6 +488,7 @@ export class ActivityRoom extends EventEmitter {
     if (call === "ENFORCE_SUN" && this.contractInfo) {
       this.contractInfo.mode = "SUN";
       this.contractInfo.trump = "";
+      this.discussionLastRaiserTeam = null;
       return;
     }
     if (call === "ENFORCE_HUKUM" && this.contractInfo) {
@@ -487,14 +506,17 @@ export class ActivityRoom extends EventEmitter {
         multiplier: 1,
         closed: false
       };
+      this.discussionLastRaiserTeam = null;
       return;
     }
     if (call.startsWith("BET_") || call === "GAHWA") {
       if (!this.contractInfo) return;
+      const actorTeam = this.teamOfSeat(action.actor_id);
       if (call === "BET_TRIPLE") this.contractInfo.multiplier = Math.max(this.contractInfo.multiplier, 3);
       else if (call === "BET_QUADRUPLE") this.contractInfo.multiplier = Math.max(this.contractInfo.multiplier, 4);
       else if (call !== "GAHWA") this.contractInfo.multiplier = Math.max(this.contractInfo.multiplier, 2);
       this.contractInfo.closed = call === "BET_CLOSE";
+      this.discussionLastRaiserTeam = actorTeam;
       return;
     }
     if (call === "SUN" || call === "ASHKAL" || call === "HUKUM") {
@@ -507,7 +529,89 @@ export class ActivityRoom extends EventEmitter {
         multiplier: 1,
         closed: false
       };
+      this.discussionLastRaiserTeam = null;
     }
+  }
+
+  validateBuyCall(seat, data) {
+    const call = data.call;
+    const phase = String(this.currentTurn?.phase || "");
+    const trump = data.trump || "";
+
+    if (trump && call !== "HUKUM" && call !== "ENFORCE_HUKUM") {
+      throw new Error("Trump is only valid for HUKUM calls.");
+    }
+
+    if (phase === "1" || phase === "2") {
+      if (!BID_PHASE_CALLS.has(call)) throw new Error(`BUY_CALL ${call} is not legal in phase ${phase}.`);
+      if (call === "ASHKAL") {
+        if (phase === "2") throw new Error("ASHKAL is not legal in phase 2.");
+        if (!this.isCutterOrDealer(seat)) throw new Error("ASHKAL is only legal for cutter or dealer.");
+      }
+      if (phase === "2" && call === "HUKUM") {
+        if (!trump) throw new Error("Phase 2 HUKUM must choose a trump suit.");
+        if (trump === this.middleSuit()) throw new Error("Phase 2 HUKUM cannot use the middle suit.");
+      }
+      return;
+    }
+
+    if (phase === "discussion") {
+      if (!DISCUSSION_CALLS.has(call)) throw new Error(`BUY_CALL ${call} is not legal during discussion.`);
+      if (call === "BAS") return;
+      if (!this.contractInfo) throw new Error("Discussion calls require an active contract.");
+
+      if (call === "GABLAK_SUN" || call === "GABLAK_ASHKAL") {
+        if (call === "GABLAK_ASHKAL" && !this.isCutterOrDealer(seat)) {
+          throw new Error("GABLAK_ASHKAL is only legal for cutter or dealer.");
+        }
+        if (this.teamOfSeat(seat) === this.contractInfo.buyerTeam && this.contractInfo.sourceCall !== "HUKUM") {
+          throw new Error("Cannot gablak a teammate unless the original buy was HUKUM.");
+        }
+        return;
+      }
+
+      if (BET_CALLS.has(call)) {
+        const actorTeam = this.teamOfSeat(seat);
+        if (!this.discussionLastRaiserTeam && actorTeam === this.contractInfo.buyerTeam) {
+          throw new Error("Buyer team cannot open the bet.");
+        }
+        if (this.contractInfo.mode === "SUN" && call === "BET_CLOSE") {
+          throw new Error("Sun betting can only be open.");
+        }
+        if (this.discussionLastRaiserTeam && actorTeam === this.discussionLastRaiserTeam) {
+          throw new Error("Betting must alternate between teams.");
+        }
+        const nextMultiplier = this.betMultiplier(call, this.contractInfo.multiplier);
+        if (nextMultiplier < this.contractInfo.multiplier) {
+          throw new Error("Bet multiplier cannot decrease.");
+        }
+        return;
+      }
+    }
+
+    if (phase === "enforce") {
+      if (!ENFORCE_CALLS.has(call)) throw new Error(`BUY_CALL ${call} is not legal during enforce.`);
+      if (!this.contractInfo || this.contractInfo.mode !== "HUKUM") {
+        throw new Error("Enforce calls require an active HUKUM contract.");
+      }
+      return;
+    }
+
+    throw new Error(`Unsupported BUY_CALL phase ${phase || "(unknown)"}.`);
+  }
+
+  isCutterOrDealer(seat) {
+    if (this.state.seats.cutter || this.state.seats.dealer) {
+      return seat === this.state.seats.cutter || seat === this.state.seats.dealer;
+    }
+    return seat === 3 || seat === 4;
+  }
+
+  betMultiplier(call, current) {
+    if (call === "BET_TRIPLE") return Math.max(current, 3);
+    if (call === "BET_QUADRUPLE") return Math.max(current, 4);
+    if (call === "GAHWA") return current;
+    return Math.max(current, 2);
   }
 
   middleSuit() {

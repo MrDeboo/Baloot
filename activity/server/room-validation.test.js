@@ -35,6 +35,17 @@ function makeRoom() {
   return { room, sent };
 }
 
+function addPlayer(room, id, seat) {
+  room.participants.set(id, {
+    user: { id, name: id, avatar: "" },
+    connected: true,
+    role: "player",
+    seat
+  });
+  room.playersBySeat.set(seat, id);
+  room.state.hands.set(seat, []);
+}
+
 function seedPlayingTrick(room, { hand, contract, trick = [], round = 1 }) {
   room.currentTurn = { actorId: 1, kind: "PLAY_CARD", round };
   room.state.seats = { initiator: 1, nitwit: 2, cutter: 3, dealer: 4 };
@@ -44,8 +55,13 @@ function seedPlayingTrick(room, { hand, contract, trick = [], round = 1 }) {
   room.contractInfo = contract;
 }
 
+function seedSeats(room) {
+  room.state.seats = { initiator: 1, nitwit: 2, cutter: 3, dealer: 4 };
+}
+
 test("Activity room rejects malformed buy actions before the engine", () => {
   const { room, sent } = makeRoom();
+  seedSeats(room);
   room.currentTurn = { actorId: 1, kind: "BUY_CALL", phase: "1" };
 
   assert.throws(
@@ -75,6 +91,97 @@ test("Activity room rejects malformed buy actions before the engine", () => {
       seat: 1,
       actions: [{ actor_id: 1, type: "BUY_CALL", data: { call: "HUKUM", trump: "S" } }]
     }
+  ]);
+});
+
+test("Activity room validates bidding phase calls before the engine", () => {
+  const { room, sent } = makeRoom();
+  seedSeats(room);
+  room.state.middle = "10C";
+  room.currentTurn = { actorId: 1, kind: "BUY_CALL", phase: "1" };
+
+  assert.throws(
+    () => room.submitAction("player-1", { kind: "BUY_CALL", call: "ASHKAL" }),
+    /ASHKAL is only legal/
+  );
+
+  room.currentTurn = { actorId: 1, kind: "BUY_CALL", phase: "2" };
+  assert.throws(
+    () => room.submitAction("player-1", { kind: "BUY_CALL", call: "ASHKAL" }),
+    /not legal in phase 2/
+  );
+  assert.throws(
+    () => room.submitAction("player-1", { kind: "BUY_CALL", call: "HUKUM" }),
+    /must choose a trump/
+  );
+  assert.throws(
+    () => room.submitAction("player-1", { kind: "BUY_CALL", call: "HUKUM", trump: "C" }),
+    /cannot use the middle suit/
+  );
+  assert.equal(sent.length, 0);
+
+  room.submitAction("player-1", { kind: "BUY_CALL", call: "HUKUM", trump: "S" });
+  assert.deepEqual(sent.at(-1).actions, [
+    { actor_id: 1, type: "BUY_CALL", data: { call: "HUKUM", trump: "S" } }
+  ]);
+});
+
+test("Activity room validates discussion calls before the engine", () => {
+  let setup = makeRoom();
+  seedSeats(setup.room);
+  addPlayer(setup.room, "player-2", 2);
+  setup.room.currentTurn = { actorId: 2, kind: "BUY_CALL", phase: "discussion" };
+  setup.room.contractInfo = { mode: "SUN", trump: "", buyerId: 1, buyerTeam: "A", sourceCall: "SUN", multiplier: 1, closed: false };
+
+  assert.throws(
+    () => setup.room.submitAction("player-2", { kind: "BUY_CALL", call: "BET_CLOSE" }),
+    /Sun betting can only be open/
+  );
+  assert.throws(
+    () => setup.room.submitAction("player-2", { kind: "BUY_CALL", call: "GABLAK_ASHKAL" }),
+    /only legal for cutter or dealer/
+  );
+
+  setup.room.submitAction("player-2", { kind: "BUY_CALL", call: "BET_OPEN" });
+  assert.deepEqual(setup.sent.at(-1).actions, [
+    { actor_id: 2, type: "BUY_CALL", data: { call: "BET_OPEN" } }
+  ]);
+
+  setup = makeRoom();
+  seedSeats(setup.room);
+  addPlayer(setup.room, "player-3", 3);
+  setup.room.currentTurn = { actorId: 3, kind: "BUY_CALL", phase: "discussion" };
+  setup.room.contractInfo = { mode: "SUN", trump: "", buyerId: 1, buyerTeam: "A", sourceCall: "SUN", multiplier: 1, closed: false };
+  assert.throws(
+    () => setup.room.submitAction("player-3", { kind: "BUY_CALL", call: "BET_OPEN" }),
+    /Buyer team cannot open/
+  );
+  assert.throws(
+    () => setup.room.submitAction("player-3", { kind: "BUY_CALL", call: "GABLAK_SUN" }),
+    /Cannot gablak a teammate/
+  );
+
+  setup.room.contractInfo.sourceCall = "HUKUM";
+  setup.room.submitAction("player-3", { kind: "BUY_CALL", call: "GABLAK_SUN" });
+  assert.deepEqual(setup.sent.at(-1).actions, [
+    { actor_id: 3, type: "BUY_CALL", data: { call: "GABLAK_SUN" } }
+  ]);
+});
+
+test("Activity room validates enforce calls before the engine", () => {
+  const { room, sent } = makeRoom();
+  seedSeats(room);
+  room.currentTurn = { actorId: 1, kind: "BUY_CALL", phase: "enforce" };
+  room.contractInfo = { mode: "HUKUM", trump: "C", buyerId: 1, buyerTeam: "A", sourceCall: "HUKUM", multiplier: 1, closed: false };
+
+  assert.throws(
+    () => room.submitAction("player-1", { kind: "BUY_CALL", call: "SUN" }),
+    /not legal during enforce/
+  );
+
+  room.submitAction("player-1", { kind: "BUY_CALL", call: "ENFORCE_HUKUM", trump: "S" });
+  assert.deepEqual(sent.at(-1).actions, [
+    { actor_id: 1, type: "BUY_CALL", data: { call: "ENFORCE_HUKUM", trump: "S" } }
   ]);
 });
 
