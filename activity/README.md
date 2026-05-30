@@ -18,6 +18,7 @@ when the engine asks that seat for a move.
    ```sh
    DISCORD_CLIENT_ID=your_application_id
    DISCORD_CLIENT_SECRET=your_oauth_client_secret
+   DISCORD_BOT_TOKEN=your_bot_token_for_instance_verification
    ACTIVITY_SESSION_SECRET=a-long-random-string
    ACTIVITY_PUBLIC_URL=https://your-activity-domain.example
    ```
@@ -48,7 +49,8 @@ player seats. A fifth browser joins as a spectator.
 
 ## How It Uses The Engine
 
-- The Activity backend spawns `baloot-server --port 0 --matches 1`.
+- The Activity backend reserves a local TCP port and spawns
+  `baloot-server --matches 1` on that port.
 - It creates four TCP proxy clients, one for each seated Activity player.
 - Engine `ACTIONS` frames update the Activity room and are streamed to browsers.
 - Private deal frames update only the owning player's hand.
@@ -56,11 +58,18 @@ player seats. A fifth browser joins as a spectator.
   sequence number.
 - If the engine rejects an action, disconnects, or times out, the existing
   engine forfeit behavior is preserved.
+- In Discord, the client uses the `/.proxy/api/*` path supported by the backend.
+- When `DISCORD_BOT_TOKEN` is set, `/api/token` verifies the authenticated user
+  is present in the Discord Activity instance before issuing an Activity session.
 
 ## Useful Environment Variables
 
+- `ACTIVITY_HOST`: bind address, default `127.0.0.1`; use `0.0.0.0` behind a
+  production proxy/container.
 - `ACTIVITY_PORT`: backend port, default `3000`.
 - `ACTIVITY_PUBLIC_URL`: public Activity origin.
+- `DISCORD_BOT_TOKEN`: optional but recommended; enables Discord Activity
+  Instance API verification for production sessions.
 - `BALOOT_SERVER_BIN`: path to `baloot-server`.
 - `BALOOT_TARGET_SCORE`: target score passed to the engine, default `152`.
 - `BALOOT_READ_TIMEOUT_MS`: engine read timeout, default `900000`.

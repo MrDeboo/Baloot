@@ -36,21 +36,54 @@ let session = "";
 let eventSource = null;
 let snapshot = null;
 let selectedCard = "";
+let discordSdk = null;
+let apiPrefix = "";
 
 function cardColor(card) {
   return card.endsWith("H") || card.endsWith("D") ? "red" : "black";
 }
 
 function cardHtml(card) {
-  return `<button class="card ${cardColor(card)}" type="button" data-card="${card}" aria-label="${card}">${card}</button>`;
+  return `<button class="card ${cardColor(card)}" type="button" data-card="${escapeHtml(card)}" aria-label="${escapeHtml(card)}">${escapeHtml(card)}</button>`;
 }
 
 function setStatus(text) {
   els.roomStatus.textContent = text;
 }
 
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function apiPath(path) {
+  return `${apiPrefix}${path}`;
+}
+
+async function fetchJson(paths, options) {
+  const candidates = Array.isArray(paths) ? paths : [paths];
+  let lastError = null;
+  for (const path of candidates) {
+    try {
+      const response = await fetch(path, options);
+      if (!response.ok) {
+        lastError = new Error(`${path} returned ${response.status}`);
+        continue;
+      }
+      return response.json();
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError ?? new Error("Request failed");
+}
+
 async function authenticate() {
-  const config = await fetch("/api/config").then((response) => response.json());
+  const config = await fetchJson(["/api/config", "/.proxy/api/config"]);
   const mockMode = qs.get("mock") === "1" || !config.clientId;
 
   if (mockMode) {
@@ -61,9 +94,10 @@ async function authenticate() {
   }
 
   const { DiscordSDK } = await import("https://esm.sh/@discord/embedded-app-sdk@1?bundle");
-  const discordSdk = new DiscordSDK(config.clientId);
+  discordSdk = new DiscordSDK(config.clientId);
   await discordSdk.ready();
   roomId = discordSdk.instanceId || roomId;
+  apiPrefix = config.proxyPrefix || "/.proxy";
 
   const { code } = await discordSdk.commands.authorize({
     client_id: config.clientId,
@@ -73,10 +107,10 @@ async function authenticate() {
     scope: ["identify"]
   });
 
-  const token = await fetch("/api/token", {
+  const token = await fetch(apiPath("/api/token"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ code })
+    body: JSON.stringify({ code, instanceId: roomId })
   }).then((response) => {
     if (!response.ok) throw new Error("Discord auth failed");
     return response.json();
@@ -91,7 +125,7 @@ async function authenticate() {
 function connectEvents() {
   const params = new URLSearchParams({ room: roomId, name: user.name, userId: user.id });
   if (session) params.set("session", session);
-  eventSource = new EventSource(`/api/events?${params}`);
+  eventSource = new EventSource(`${apiPath("/api/events")}?${params}`);
   eventSource.addEventListener("snapshot", (event) => {
     snapshot = JSON.parse(event.data);
     render();
@@ -104,10 +138,10 @@ function renderPeople(container, people, emptyText) {
     ? people
         .map((person) => {
           const label = person.seat ? `P${person.seat}` : person.name.slice(0, 1).toUpperCase();
-          return `<div class="avatar-chip"><span class="avatar-dot">${label}</span>${person.name}</div>`;
+          return `<div class="avatar-chip"><span class="avatar-dot">${escapeHtml(label)}</span>${escapeHtml(person.name)}</div>`;
         })
         .join("")
-    : `<span class="avatar-chip">${emptyText}</span>`;
+    : `<span class="avatar-chip">${escapeHtml(emptyText)}</span>`;
 }
 
 function renderSeats() {
@@ -133,8 +167,8 @@ function renderSeats() {
     const isTurn = snapshot.currentTurn?.actorId === seat;
     element.classList.toggle("is-turn", isTurn);
     element.innerHTML = player
-      ? `<div class="seat-name">P${seat} ${player.name}</div><div class="seat-role">${role}</div>`
-      : `<div class="seat-name">Open seat</div><div class="seat-role">${role}</div>`;
+      ? `<div class="seat-name">P${seat} ${escapeHtml(player.name)}</div><div class="seat-role">${escapeHtml(role)}</div>`
+      : `<div class="seat-name">Open seat</div><div class="seat-role">${escapeHtml(role)}</div>`;
   }
 }
 
@@ -182,12 +216,14 @@ function render() {
   els.turnLabel.textContent = snapshot.currentTurn
     ? `P${snapshot.currentTurn.actorId}: ${snapshot.currentTurn.kind}`
     : "No pending turn";
-  els.trickCards.innerHTML = snapshot.state.trick.map((play) => `<div class="card ${cardColor(play.card)}">P${play.player}<br>${play.card}</div>`).join("");
+  els.trickCards.innerHTML = snapshot.state.trick
+    .map((play) => `<div class="card ${cardColor(play.card)}">P${play.player}<br>${escapeHtml(play.card)}</div>`)
+    .join("");
   els.handCards.innerHTML = snapshot.self.hand.map(cardHtml).join("");
   for (const card of els.handCards.querySelectorAll(".card")) {
     card.classList.toggle("is-selected", card.dataset.card === selectedCard);
   }
-  els.matchLog.innerHTML = snapshot.state.log.map((line) => `<div>${line}</div>`).join("");
+  els.matchLog.innerHTML = snapshot.state.log.map((line) => `<div>${escapeHtml(line)}</div>`).join("");
   renderControls();
 }
 
@@ -222,7 +258,7 @@ els.actionForm.addEventListener("submit", async (event) => {
     }
   }
 
-  const response = await fetch("/api/action", {
+  const response = await fetch(apiPath("/api/action"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body)

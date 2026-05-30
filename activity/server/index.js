@@ -10,9 +10,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const activityRoot = path.resolve(__dirname, "..");
 const clientRoot = path.join(activityRoot, "client");
 const port = Number(process.env.ACTIVITY_PORT ?? 3000);
+const host = process.env.ACTIVITY_HOST ?? "127.0.0.1";
 const publicUrl = process.env.ACTIVITY_PUBLIC_URL ?? `http://127.0.0.1:${port}`;
 const sessionSecret = process.env.ACTIVITY_SESSION_SECRET ?? "local-dev-secret";
 const allowInsecureDev = process.env.ACTIVITY_ALLOW_INSECURE_DEV !== "0";
+const discordBotToken = process.env.DISCORD_BOT_TOKEN ?? "";
 const hub = new ActivityHub();
 
 const mimeTypes = new Map([
@@ -57,9 +59,10 @@ function base64url(value) {
   return Buffer.from(value).toString("base64url");
 }
 
-function signSession(user) {
+function signSession({ user, instanceId = "" }) {
   const payload = JSON.stringify({
     user,
+    instanceId,
     exp: Math.floor(Date.now() / 1000) + 24 * 60 * 60
   });
   const encoded = base64url(payload);
@@ -68,13 +71,35 @@ function signSession(user) {
 }
 
 function verifySession(token) {
-  if (!token || typeof token !== "string" || !token.includes(".")) return null;
-  const [encoded, signature] = token.split(".");
-  const expected = crypto.createHmac("sha256", sessionSecret).update(encoded).digest("base64url");
-  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
-  const payload = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8"));
-  if (!payload.exp || payload.exp < Math.floor(Date.now() / 1000)) return null;
-  return payload.user;
+  try {
+    if (!token || typeof token !== "string" || !token.includes(".")) return null;
+    const [encoded, signature] = token.split(".");
+    const expected = crypto.createHmac("sha256", sessionSecret).update(encoded).digest("base64url");
+    if (Buffer.byteLength(signature) !== Buffer.byteLength(expected)) return null;
+    if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
+    const payload = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8"));
+    if (!payload.exp || payload.exp < Math.floor(Date.now() / 1000)) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+async function verifyActivityInstance({ userId, instanceId }) {
+  if (!discordBotToken) return { verified: true, skipped: true };
+  const clientId = process.env.DISCORD_CLIENT_ID;
+  if (!clientId || !instanceId) return { verified: false, skipped: false };
+
+  const response = await fetch(
+    `https://discord.com/api/applications/${clientId}/activity-instances/${instanceId}`,
+    { headers: { Authorization: `Bot ${discordBotToken}` } }
+  );
+  if (!response.ok) return { verified: false, skipped: false };
+  const instance = await response.json();
+  return {
+    verified: Array.isArray(instance.users) && instance.users.includes(userId),
+    skipped: false
+  };
 }
 
 async function exchangeDiscordToken(code) {
@@ -120,14 +145,19 @@ async function exchangeDiscordToken(code) {
 
 function userFromRequest(url, body = {}) {
   const session = body.session ?? url.searchParams.get("session");
-  const sessionUser = verifySession(session);
-  if (sessionUser) return sessionUser;
-  if (!allowInsecureDev) return null;
+  const sessionPayload = verifySession(session);
+  if (sessionPayload?.user) {
+    return { user: sessionPayload.user, instanceId: sessionPayload.instanceId ?? "" };
+  }
 
+  if (!allowInsecureDev) return null;
   const id = body.userId ?? url.searchParams.get("userId") ?? url.searchParams.get("name");
   const name = body.name ?? url.searchParams.get("name") ?? "Local Player";
   if (!id) return null;
-  return { id: String(id), name: String(name), avatar: "" };
+  return {
+    user: { id: String(id), name: String(name), avatar: "" },
+    instanceId: body.roomId ?? url.searchParams.get("room") ?? "local"
+  };
 }
 
 async function serveStatic(url, response) {
@@ -155,55 +185,70 @@ async function serveStatic(url, response) {
 
 const server = http.createServer(async (request, response) => {
   const url = new URL(request.url, publicUrl);
+  const requestPath = url.pathname.startsWith("/.proxy/")
+    ? url.pathname.slice("/.proxy".length)
+    : url.pathname;
 
   try {
-    if (request.method === "GET" && url.pathname === "/api/health") {
+    if (request.method === "GET" && requestPath === "/api/health") {
       json(response, 200, { ok: true });
       return;
     }
 
-    if (request.method === "GET" && url.pathname === "/api/config") {
+    if (request.method === "GET" && requestPath === "/api/config") {
       json(response, 200, {
         clientId: process.env.DISCORD_CLIENT_ID ?? "",
         publicUrl,
-        allowInsecureDev
+        allowInsecureDev,
+        proxyPrefix: "/.proxy",
+        requiresActivityInstanceVerification: Boolean(discordBotToken)
       });
       return;
     }
 
-    if (request.method === "POST" && url.pathname === "/api/token") {
+    if (request.method === "POST" && requestPath === "/api/token") {
       const body = await readBody(request);
       const token = await exchangeDiscordToken(body.code);
-      json(response, 200, { ...token, session: signSession(token.user) });
+      const instanceId = typeof body.instanceId === "string" ? body.instanceId : "";
+      const instance = await verifyActivityInstance({ userId: token.user.id, instanceId });
+      if (!instance.verified) {
+        json(response, 403, { error: "Discord Activity instance verification failed." });
+        return;
+      }
+      json(response, 200, {
+        ...token,
+        instance,
+        session: signSession({ user: token.user, instanceId })
+      });
       return;
     }
 
-    if (request.method === "GET" && url.pathname === "/api/events") {
-      const user = userFromRequest(url);
-      if (!user) {
+    if (request.method === "GET" && requestPath === "/api/events") {
+      const auth = userFromRequest(url);
+      if (!auth) {
         json(response, 401, { error: "Missing or invalid Activity session." });
         return;
       }
-      const room = hub.getRoom(url.searchParams.get("room"));
-      room.connect({ user, response });
+      const room = hub.getRoom(auth.instanceId || url.searchParams.get("room"));
+      room.connect({ user: auth.user, response });
       return;
     }
 
-    if (request.method === "POST" && url.pathname === "/api/action") {
+    if (request.method === "POST" && requestPath === "/api/action") {
       const body = await readBody(request);
-      const user = userFromRequest(url, body);
-      if (!user) {
+      const auth = userFromRequest(url, body);
+      if (!auth) {
         json(response, 401, { error: "Missing or invalid Activity session." });
         return;
       }
-      const room = hub.getRoom(body.roomId);
-      room.submitAction(user.id, body);
+      const room = hub.getRoom(auth.instanceId || body.roomId);
+      room.submitAction(auth.user.id, body);
       json(response, 200, { ok: true });
       return;
     }
 
     if (request.method === "GET") {
-      await serveStatic(url, response);
+      await serveStatic(new URL(requestPath, publicUrl), response);
       return;
     }
 
@@ -213,6 +258,6 @@ const server = http.createServer(async (request, response) => {
   }
 });
 
-server.listen(port, "127.0.0.1", () => {
-  console.log(`Baloot Activity listening on http://127.0.0.1:${port}`);
+server.listen(port, host, () => {
+  console.log(`Baloot Activity listening on http://${host}:${port}`);
 });
