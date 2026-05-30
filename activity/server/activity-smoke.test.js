@@ -89,6 +89,43 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function driveHumanSubmittedMatch(room, responses) {
+  let submitted = 0;
+  while (true) {
+    const result = await waitFor(() => {
+      const state = latest(responses[0]);
+      if (state?.status === "ended") return { ended: true, state };
+      if (state?.status === "error") throw new Error(state.error || "Activity entered error state.");
+      if (state?.currentTurn) return { turn: state.currentTurn };
+      return null;
+    }, 30000);
+
+    if (result.ended) return { submitted, final: result.state };
+
+    const { turn } = result;
+    const response = responses.find((item) => latest(item)?.self.seat === turn.actorId);
+    const snapshot = response ? latest(response) : null;
+    if (!snapshot) throw new Error(`No player snapshot for seat ${turn.actorId}.`);
+
+    if (turn.kind === "BUY_CALL") {
+      const call = turn.phase === "1" || turn.phase === "2" ? "SUN" : "BAS";
+      room.submitAction(`player-${turn.actorId}`, { kind: "BUY_CALL", call });
+      submitted += 1;
+      continue;
+    }
+
+    if (turn.kind === "PLAY_CARD") {
+      const card = snapshot.self.legalCards[0] ?? snapshot.self.hand[0];
+      if (!card) throw new Error(`Seat ${turn.actorId} has no card to play.`);
+      room.submitAction(`player-${turn.actorId}`, { kind: "PLAY_CARD", card });
+      submitted += 1;
+      continue;
+    }
+
+    throw new Error(`Unsupported Activity turn kind ${turn.kind}.`);
+  }
+}
+
 test("Activity starts only with four players and makes extras spectators", { skip: !engineBin }, async () => {
   const hub = new ActivityHub({ engineBin, targetScore: 32, readTimeoutMs: 900000 });
   const room = hub.getRoom(`smoke-${Date.now()}`);
@@ -133,6 +170,27 @@ test("Activity starts only with four players and makes extras spectators", { ski
     room.submitAction("player-1", { kind: "BUY_CALL", call: "BAS" });
     await waitFor(() => latest(p1)?.currentTurn?.actorId === 2);
     assert.equal(latest(p2).currentTurn.actorId, 2);
+  } finally {
+    hub.closeAll();
+  }
+});
+
+test("Activity can complete a real-engine match from four player-submitted actions", { skip: !engineBin }, async () => {
+  const hub = new ActivityHub({ engineBin, targetScore: 1, readTimeoutMs: 900000 });
+  const room = hub.getRoom(`full-match-${Date.now()}`);
+
+  try {
+    const players = [1, 2, 3, 4].map((seat) => connect(room, `player-${seat}`));
+    await waitFor(() =>
+      players.every((response) => latest(response)?.self.hand.length === 5) &&
+      latest(players[0])?.status === "playing"
+    );
+
+    const result = await driveHumanSubmittedMatch(room, players);
+    assert.equal(result.final.status, "ended");
+    assert.match(result.final.state.log.at(-1), /Match ended/);
+    assert.ok(result.final.state.scores.A >= 1 || result.final.state.scores.B >= 1);
+    assert.ok(result.submitted >= 8);
   } finally {
     hub.closeAll();
   }
