@@ -18,7 +18,7 @@ const allowInsecureDev = process.env.ACTIVITY_ALLOW_INSECURE_DEV === "1";
 const discordBotToken = process.env.DISCORD_BOT_TOKEN ?? "";
 const discordProxyPublicKey = process.env.DISCORD_PROXY_PUBLIC_KEY || process.env.DISCORD_APPLICATION_PUBLIC_KEY || "";
 const activityAssetVersion = process.env.ACTIVITY_ASSET_VERSION || Date.now().toString(36);
-const discordApiBase = process.env.DISCORD_API_BASE_URL ?? "https://discord.com/api/v10";
+const discordApiBase = process.env.DISCORD_API_BASE_URL || "https://discord.com/api/v10";
 const sessionCookieName = "baloot_activity_session";
 const hub = new ActivityHub({
   verifyPlayersReady: ({ roomId, userIds }) =>
@@ -90,7 +90,7 @@ function sessionCookieHeader(session) {
     "Max-Age=86400",
     secure ? "SameSite=None" : "SameSite=Lax"
   ];
-  if (secure) attributes.push("Secure");
+  if (secure) attributes.push("Secure", "Partitioned");
   return attributes.join("; ");
 }
 
@@ -232,9 +232,17 @@ function assertProxyUserMatches(proxy, userId) {
 }
 
 async function serveStatic(url, response) {
-  const requested = decodeURIComponent(url.pathname === "/" ? "/index.html" : url.pathname);
+  let requested = "";
+  try {
+    requested = decodeURIComponent(url.pathname === "/" ? "/index.html" : url.pathname);
+  } catch {
+    json(response, 400, { error: "Invalid path" });
+    return;
+  }
+
   const resolved = path.resolve(clientRoot, `.${requested}`);
-  if (!resolved.startsWith(clientRoot)) {
+  const relative = path.relative(clientRoot, resolved);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
     json(response, 403, { error: "Forbidden" });
     return;
   }

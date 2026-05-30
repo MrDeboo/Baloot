@@ -155,6 +155,7 @@ test("production token exchange sets an Activity session cookie", async () => {
       DISCORD_CLIENT_SECRET: "secret",
       DISCORD_BOT_TOKEN: "bot",
       DISCORD_API_BASE_URL: discord.baseUrl,
+      ACTIVITY_PUBLIC_URL: "https://123.discordsays.com",
       ACTIVITY_SESSION_SECRET: "0123456789abcdef0123456789abcdef"
     },
     stdio: ["ignore", "pipe", "pipe"]
@@ -170,7 +171,11 @@ test("production token exchange sets an Activity session cookie", async () => {
       body: JSON.stringify({ code: "code-1", instanceId: "instance-1" })
     });
     assert.equal(token.status, 200);
-    assert.match(token.headers.get("set-cookie") ?? "", /baloot_activity_session=.*HttpOnly/);
+    const setCookie = token.headers.get("set-cookie") ?? "";
+    assert.match(setCookie, /baloot_activity_session=.*HttpOnly/);
+    assert.match(setCookie, /SameSite=None/);
+    assert.match(setCookie, /Secure/);
+    assert.match(setCookie, /Partitioned/);
 
     const tokenBody = await token.json();
     assert.ok(tokenBody.session);
@@ -454,6 +459,9 @@ test("Activity client serves the vendored Discord SDK without external CDN impor
 
     const legacyConfig = await fetch(`${baseUrl}/.proxy/api/config`);
     assert.equal(legacyConfig.status, 200);
+
+    const traversal = await fetch(`${baseUrl}/%2e%2e%2f.env.example`);
+    assert.equal(traversal.status, 403);
   } finally {
     server.kill();
     await new Promise((resolve) => server.once("exit", resolve));

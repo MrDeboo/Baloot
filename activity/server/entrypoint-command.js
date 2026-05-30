@@ -7,7 +7,7 @@ export const PRIMARY_ENTRY_POINT = 4;
 export const DISCORD_LAUNCH_ACTIVITY = 2;
 
 function discordApiBase(env = process.env) {
-  return env.DISCORD_API_BASE_URL ?? "https://discord.com/api/v10";
+  return env.DISCORD_API_BASE_URL || "https://discord.com/api/v10";
 }
 
 function botHeaders(botToken) {
