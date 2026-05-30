@@ -1,10 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { signSession } from "./auth.js";
 
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 
@@ -32,6 +35,29 @@ async function waitForHealth(baseUrl) {
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   throw new Error("Timed out waiting for Activity server health check.");
+}
+
+function discordPublicKeyHex(publicKey) {
+  const spki = publicKey.export({ format: "der", type: "spki" });
+  return spki.subarray(-32).toString("hex");
+}
+
+function signedProxyHeaders(payload, privateKey) {
+  const payloadBytes = Buffer.from(JSON.stringify(payload), "utf8");
+  return {
+    "x-signature-ed25519": crypto.sign(null, payloadBytes, privateKey).toString("base64"),
+    "x-signature-timestamp": String(payload.created_at),
+    "x-discord-proxy-payload": payloadBytes.toString("base64")
+  };
+}
+
+function proxyPayload(userId) {
+  return {
+    application_id: "123",
+    created_at: 1000,
+    expires_at: Math.floor(Date.now() / 1000) + 60,
+    user: { id: userId }
+  };
 }
 
 test("production config rejects insecure mock users", async () => {
@@ -93,6 +119,51 @@ test("production API can require Discord proxy signatures", async () => {
     const config = await fetch(`${baseUrl}/api/config`);
     assert.equal(config.status, 401);
     assert.match(await config.text(), /proxy request verification failed/i);
+  } finally {
+    server.kill();
+    await new Promise((resolve) => server.once("exit", resolve));
+  }
+});
+
+test("production API binds signed proxy users to Activity sessions", async () => {
+  const { publicKey, privateKey } = crypto.generateKeyPairSync("ed25519");
+  const port = await reservePort();
+  const server = spawn(process.execPath, ["activity/server/index.js"], {
+    cwd: repoRoot,
+    env: {
+      ...process.env,
+      ACTIVITY_PORT: String(port),
+      ACTIVITY_HOST: "127.0.0.1",
+      ACTIVITY_ALLOW_INSECURE_DEV: "0",
+      DISCORD_CLIENT_ID: "123",
+      DISCORD_CLIENT_SECRET: "secret",
+      DISCORD_BOT_TOKEN: "bot",
+      ACTIVITY_SESSION_SECRET: "0123456789abcdef0123456789abcdef",
+      DISCORD_PROXY_PUBLIC_KEY: discordPublicKeyHex(publicKey)
+    },
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+
+  try {
+    const baseUrl = `http://127.0.0.1:${port}`;
+    await waitForHealth(baseUrl);
+
+    const session = signSession(
+      { user: { id: "user-1", name: "User One", avatar: "" }, instanceId: "instance-1" },
+      { secret: "0123456789abcdef0123456789abcdef" }
+    );
+
+    const mismatch = await fetch(`${baseUrl}/api/events?session=${encodeURIComponent(session)}`, {
+      headers: signedProxyHeaders(proxyPayload("user-2"), privateKey)
+    });
+    assert.equal(mismatch.status, 400);
+    assert.match(await mismatch.text(), /proxy user does not match/i);
+
+    const match = await fetch(`${baseUrl}/api/events?session=${encodeURIComponent(session)}`, {
+      headers: signedProxyHeaders(proxyPayload("user-1"), privateKey)
+    });
+    assert.equal(match.status, 200);
+    await match.body.cancel();
   } finally {
     server.kill();
     await new Promise((resolve) => server.once("exit", resolve));

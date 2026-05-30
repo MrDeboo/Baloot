@@ -144,6 +144,26 @@ function userFromRequest(url, body = {}) {
   };
 }
 
+function userIdFromProxyPayload(payload) {
+  const user = payload?.user;
+  if (typeof user === "string") return user;
+  if (user && typeof user === "object") {
+    return String(user.id ?? user.user_id ?? "");
+  }
+  return String(payload?.user_id ?? payload?.userId ?? "");
+}
+
+function assertProxyUserMatches(proxy, userId) {
+  if (allowInsecureDev || proxy.skipped) return;
+  const proxyUserId = userIdFromProxyPayload(proxy.payload);
+  if (!proxyUserId) {
+    throw new Error("Discord proxy payload is missing user context.");
+  }
+  if (String(proxyUserId) !== String(userId)) {
+    throw new Error("Discord proxy user does not match the Activity session.");
+  }
+}
+
 async function serveStatic(url, response) {
   const requested = decodeURIComponent(url.pathname === "/" ? "/index.html" : url.pathname);
   const resolved = path.resolve(clientRoot, `.${requested}`);
@@ -222,6 +242,7 @@ const server = http.createServer(async (request, response) => {
     if (request.method === "POST" && requestPath === "/api/token") {
       const body = await readBody(request);
       const token = await exchangeDiscordToken(body.code);
+      assertProxyUserMatches(proxy, token.user.id);
       const instanceId = typeof body.instanceId === "string" ? body.instanceId : "";
       const instance = await verifyActivityInstance({ userId: token.user.id, instanceId });
       if (!instance.verified) {
@@ -245,6 +266,7 @@ const server = http.createServer(async (request, response) => {
         json(response, 401, { error: "Missing or invalid Activity session." });
         return;
       }
+      assertProxyUserMatches(proxy, auth.user.id);
       const room = hub.getRoom(auth.instanceId || url.searchParams.get("room"));
       room.connect({ user: auth.user, response });
       return;
@@ -257,6 +279,7 @@ const server = http.createServer(async (request, response) => {
         json(response, 401, { error: "Missing or invalid Activity session." });
         return;
       }
+      assertProxyUserMatches(proxy, auth.user.id);
       const room = hub.getRoom(auth.instanceId || body.roomId);
       room.submitAction(auth.user.id, body);
       json(response, 200, { ok: true });

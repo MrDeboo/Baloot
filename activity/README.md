@@ -79,7 +79,9 @@ For production, set `ACTIVITY_ALLOW_INSECURE_DEV=0`. In that mode,
 against Discord's Activity Instance API before issuing a session or seating the
 user in a room. If `DISCORD_PROXY_PUBLIC_KEY` is set to the application's public
 key from the Developer Portal, API requests must also include valid Discord
-proxy signature headers. `node server/preflight.js` fails if production Discord
+proxy signature headers. For signed requests that include user context, the
+backend also verifies that the signed proxy user matches the Activity session
+user before allowing gameplay requests. `node server/preflight.js` fails if production Discord
 credentials, the public HTTPS URL, the session secret, or the C++ engine binary
 are missing.
 
@@ -101,6 +103,9 @@ are missing.
   than from an external CDN.
 - In production mode, `/api/token` verifies the authenticated user is present in
   the Discord Activity instance before issuing an Activity session.
+- When proxy request signatures are enabled, signed Discord proxy user context is
+  bound to the Activity session user for `/api/token`, `/api/events`, and
+  `/api/action`.
 - Non-HTML Activity assets are served with `Cache-Control: no-store` so Discord
   clients do not hold stale JavaScript or CSS after a deploy.
 
