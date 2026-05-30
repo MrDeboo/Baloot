@@ -183,7 +183,8 @@ Build the C++ engine first, then run the Activity backend:
 ```sh
 cd activity
 cp .env.example .env
-node server/index.js
+node server/preflight.js
+node server/start.js
 ```
 
 For local mock testing without Discord OAuth:
@@ -198,7 +199,9 @@ game. A fifth user in the same `room` joins as a spectator.
 For Discord deployment, configure an Activity URL mapping in the Discord
 Developer Portal and set `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`,
 `ACTIVITY_SESSION_SECRET`, `ACTIVITY_PUBLIC_URL`, `DISCORD_BOT_TOKEN`, and
-`ACTIVITY_ALLOW_INSECURE_DEV=0`. Production sessions verify Discord Activity
+`ACTIVITY_ALLOW_INSECURE_DEV=0`. Run `node server/preflight.js` from `activity/`
+before deploying; it verifies the Discord credentials, public HTTPS URL, session
+secret, and engine binary path. Production sessions verify Discord Activity
 instance membership before users can join a room. See `activity/README.md` for
 details.
 
@@ -388,7 +391,8 @@ future completion in the caller.
 Activity-specific tests can be run with:
 
 ```sh
-node --test activity/server/*.test.js
+cd activity
+node --test server/*.test.js
 ```
 
 Those tests include a real-engine smoke check for the Discord Activity bridge:

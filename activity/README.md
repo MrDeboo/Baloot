@@ -30,15 +30,22 @@ when the engine asks that seat for a move.
    cmake --build ../build --parallel
    ```
 
-5. Start the Activity backend:
+5. Check the production/runtime configuration, then start the Activity backend:
 
    ```sh
    cd activity
-   node server/index.js
+   node server/preflight.js
+   node server/start.js
    ```
 
 Local development can run without Discord OAuth by leaving
 `ACTIVITY_ALLOW_INSECURE_DEV=1` and opening:
+
+```sh
+cd activity
+cp .env.example .env
+node server/dev.js
+```
 
 ```text
 http://127.0.0.1:3000/?mock=1&room=dev&name=Adeeb
@@ -50,7 +57,8 @@ player seats. A fifth browser joins as a spectator.
 For production, set `ACTIVITY_ALLOW_INSECURE_DEV=0`. In that mode,
 `DISCORD_BOT_TOKEN` is required: the backend verifies each authenticated user
 against Discord's Activity Instance API before issuing a session or seating the
-user in a room.
+user in a room. `node server/preflight.js` fails if production Discord credentials,
+the public HTTPS URL, the session secret, or the C++ engine binary are missing.
 
 ## How It Uses The Engine
 
@@ -76,7 +84,22 @@ user in a room.
 - `DISCORD_BOT_TOKEN`: required when `ACTIVITY_ALLOW_INSECURE_DEV=0`; enables
   Discord Activity Instance API verification for production sessions.
 - `BALOOT_SERVER_BIN`: path to `baloot-server`.
+  Relative paths are resolved from the current working directory, the
+  `activity/` folder, and the repository root so both `../build/baloot-server`
+  and `build/baloot-server` work from common launch locations.
 - `BALOOT_TARGET_SCORE`: target score passed to the engine, default `152`.
 - `BALOOT_READ_TIMEOUT_MS`: engine read timeout, default `900000`.
 - `ACTIVITY_ALLOW_INSECURE_DEV`: set `1` for mock local users.
   Set `0` in production; production sessions require `DISCORD_BOT_TOKEN`.
+
+## Commands
+
+- `node server/dev.js`: loads `activity/.env` if it exists, defaults to local mock
+  users, and starts the Activity backend.
+- `node server/preflight.js`: loads `activity/.env` if it exists and validates the
+  Discord/engine configuration without starting a server.
+- `node server/start.js`: loads `activity/.env` if it exists and starts the backend.
+- `node --test server/*.test.js`: runs the Activity server tests.
+
+The same commands are also exposed as npm scripts (`npm run dev`,
+`npm run preflight`, `npm start`, `npm test`) when npm is available.

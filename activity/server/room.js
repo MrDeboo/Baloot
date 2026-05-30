@@ -117,13 +117,27 @@ function normalizeProjects(value, hand) {
   });
 }
 
-function defaultEngineBinary() {
-  const candidates = [
-    path.resolve(repoRoot, "build/baloot-server"),
-    path.resolve(repoRoot, "build/Release/baloot-server.exe"),
-    path.resolve(repoRoot, "build/baloot-server.exe")
+export function defaultEngineBinaryCandidates(root = repoRoot) {
+  return [
+    path.resolve(root, "build/baloot-server"),
+    path.resolve(root, "build/Release/baloot-server.exe"),
+    path.resolve(root, "build/baloot-server.exe")
   ];
-  return candidates.find((candidate) => fs.existsSync(candidate)) ?? candidates[0];
+}
+
+export function engineBinaryCandidates(value, { cwd = process.cwd(), root = repoRoot } = {}) {
+  if (!value) return defaultEngineBinaryCandidates(root);
+  if (path.isAbsolute(value)) return [value];
+  return [
+    path.resolve(cwd, value),
+    path.resolve(root, "activity", value),
+    path.resolve(root, value)
+  ].filter((candidate, index, values) => values.indexOf(candidate) === index);
+}
+
+export function resolveEngineBinary(value = "", { exists = fs.existsSync, cwd = process.cwd(), root = repoRoot } = {}) {
+  const candidates = engineBinaryCandidates(value, { cwd, root });
+  return candidates.find((candidate) => exists(candidate)) ?? candidates[0];
 }
 
 function reservePort() {
@@ -151,7 +165,7 @@ function publicUser(user, participant) {
 export class ActivityHub {
   constructor(options = {}) {
     this.options = {
-      engineBin: options.engineBin ?? process.env.BALOOT_SERVER_BIN ?? defaultEngineBinary(),
+      engineBin: options.engineBin ?? resolveEngineBinary(process.env.BALOOT_SERVER_BIN),
       targetScore: Number(options.targetScore ?? process.env.BALOOT_TARGET_SCORE ?? 152),
       readTimeoutMs: Number(options.readTimeoutMs ?? process.env.BALOOT_READ_TIMEOUT_MS ?? 900000)
     };
