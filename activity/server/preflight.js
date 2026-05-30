@@ -65,6 +65,11 @@ export function validateActivityConfig(env = process.env, options = {}) {
     errors.push("BALOOT_READ_TIMEOUT_MS must be an integer of at least 1000.");
   }
 
+  const disconnectGrace = integerEnv(env, "ACTIVITY_DISCONNECT_GRACE_MS", 10000);
+  if (disconnectGrace === null || disconnectGrace < 0) {
+    errors.push("ACTIVITY_DISCONNECT_GRACE_MS must be an integer of at least 0.");
+  }
+
   const publicUrl = parsePublicUrl(env.ACTIVITY_PUBLIC_URL ?? "");
   if (production) {
     for (const key of ["DISCORD_CLIENT_ID", "DISCORD_CLIENT_SECRET", "DISCORD_BOT_TOKEN"]) {
@@ -99,7 +104,8 @@ export function validateActivityConfig(env = process.env, options = {}) {
       publicUrl: publicUrl?.toString() ?? "",
       port: port ?? null,
       targetScore: targetScore ?? null,
-      readTimeoutMs: readTimeout ?? null
+      readTimeoutMs: readTimeout ?? null,
+      disconnectGraceMs: disconnectGrace ?? null
     }
   };
 }

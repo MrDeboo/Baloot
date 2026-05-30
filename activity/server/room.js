@@ -167,7 +167,8 @@ export class ActivityHub {
     this.options = {
       engineBin: options.engineBin ?? resolveEngineBinary(process.env.BALOOT_SERVER_BIN),
       targetScore: Number(options.targetScore ?? process.env.BALOOT_TARGET_SCORE ?? 152),
-      readTimeoutMs: Number(options.readTimeoutMs ?? process.env.BALOOT_READ_TIMEOUT_MS ?? 900000)
+      readTimeoutMs: Number(options.readTimeoutMs ?? process.env.BALOOT_READ_TIMEOUT_MS ?? 900000),
+      disconnectGraceMs: Number(options.disconnectGraceMs ?? process.env.ACTIVITY_DISCONNECT_GRACE_MS ?? 10000)
     };
     this.rooms = new Map();
   }
@@ -196,8 +197,10 @@ export class ActivityRoom extends EventEmitter {
     this.status = "lobby";
     this.participants = new Map();
     this.clients = new Set();
+    this.closed = false;
     this.engine = null;
     this.playersBySeat = new Map();
+    this.disconnectTimers = new Map();
     this.publicActionKeys = new Set();
     this.currentTurn = null;
     this.contractInfo = null;
@@ -248,6 +251,7 @@ export class ActivityRoom extends EventEmitter {
     if (existing) {
       existing.user = { ...existing.user, ...user };
       existing.connected = true;
+      this.cancelDisconnectForfeit(user.id, existing);
       if (this.status === "lobby" && existing.role === "spectator") {
         const players = this.connectedPlayers();
         if (players.length < 4) {
@@ -276,6 +280,7 @@ export class ActivityRoom extends EventEmitter {
   }
 
   markDisconnected(userId) {
+    if (this.closed) return;
     const participant = this.participants.get(userId);
     if (!participant) return;
     const stillConnected = [...this.clients].some((client) => client.userId === userId);
@@ -283,7 +288,58 @@ export class ActivityRoom extends EventEmitter {
     if (this.status === "lobby" && !stillConnected) {
       this.participants.delete(userId);
       this.compactLobbySeats();
+      return;
     }
+    if ((this.status === "starting" || this.status === "playing") && !stillConnected && participant.role === "player") {
+      this.scheduleDisconnectForfeit(userId, participant);
+    }
+  }
+
+  scheduleDisconnectForfeit(userId, participant) {
+    if (this.disconnectTimers.has(userId)) return;
+    const graceMs = Math.max(0, Number(this.options.disconnectGraceMs ?? 10000));
+    this.state.log.push(
+      `P${participant.seat} disconnected; ${graceMs > 0 ? `forfeit in ${Math.ceil(graceMs / 1000)}s` : "forfeiting"}`
+    );
+    if (this.state.log.length > 80) this.state.log = this.state.log.slice(-80);
+
+    const forfeit = () => {
+      this.disconnectTimers.delete(userId);
+      const current = this.participants.get(userId);
+      if (!current || current.connected || current.role !== "player") return;
+      if (this.status !== "starting" && this.status !== "playing") return;
+      this.state.log.push(`P${current.seat} forfeited after disconnect`);
+      if (this.state.log.length > 80) this.state.log = this.state.log.slice(-80);
+      this.currentTurn = null;
+      this.engine?.forfeitSeat(current.seat);
+      this.broadcast();
+    };
+
+    if (graceMs === 0) {
+      forfeit();
+      return;
+    }
+    const timer = setTimeout(forfeit, graceMs);
+    timer.unref?.();
+    this.disconnectTimers.set(userId, timer);
+  }
+
+  cancelDisconnectForfeit(userId, participant) {
+    const timer = this.disconnectTimers.get(userId);
+    if (!timer) return;
+    clearTimeout(timer);
+    this.disconnectTimers.delete(userId);
+    if (participant.role === "player" && (this.status === "starting" || this.status === "playing")) {
+      this.state.log.push(`P${participant.seat} reconnected`);
+      if (this.state.log.length > 80) this.state.log = this.state.log.slice(-80);
+    }
+  }
+
+  clearDisconnectTimers() {
+    for (const timer of this.disconnectTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.disconnectTimers.clear();
   }
 
   maybeStart() {
@@ -820,6 +876,8 @@ export class ActivityRoom extends EventEmitter {
   }
 
   close() {
+    this.closed = true;
+    this.clearDisconnectTimers();
     for (const client of this.clients) {
       client.response.end?.();
     }
@@ -960,6 +1018,12 @@ class EngineMatch {
     const connection = this.seats.get(seat);
     if (!connection) throw new Error("Engine seat is not connected.");
     connection.sendActions(actions);
+  }
+
+  forfeitSeat(seat) {
+    const connection = this.seats.get(seat);
+    if (!connection) return;
+    connection.close();
   }
 
   stop() {

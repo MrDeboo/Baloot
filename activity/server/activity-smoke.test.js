@@ -196,6 +196,28 @@ test("Activity can complete a real-engine match from four player-submitted actio
   }
 });
 
+test("Disconnected in-match players forfeit without bot moves", { skip: !engineBin }, async () => {
+  const hub = new ActivityHub({ engineBin, targetScore: 32, readTimeoutMs: 900000, disconnectGraceMs: 10 });
+  const room = hub.getRoom(`forfeit-${Date.now()}`);
+
+  try {
+    const players = [1, 2, 3, 4].map((seat) => connect(room, `player-${seat}`));
+    await waitFor(() =>
+      players.every((response) => latest(response)?.self.hand.length === 5) &&
+      latest(players[0])?.status === "playing" &&
+      latest(players[0])?.currentTurn?.actorId === 1
+    );
+
+    players[0].end();
+    const ended = await waitFor(() => latest(players[1])?.status === "ended" && latest(players[1]), 10000);
+
+    assert.match(ended.state.log.join("\n"), /forfeited after disconnect|network read failed/i);
+    assert.equal(ended.state.scores.B, 32);
+  } finally {
+    hub.closeAll();
+  }
+});
+
 test("Disconnected lobby users do not reserve player seats", { skip: !engineBin }, async () => {
   const hub = new ActivityHub({ engineBin, targetScore: 32, readTimeoutMs: 900000 });
   const room = hub.getRoom(`disconnect-${Date.now()}`);

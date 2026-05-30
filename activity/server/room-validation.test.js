@@ -13,26 +13,39 @@ class MockSseResponse extends EventEmitter {
   write() {
     return true;
   }
+
+  end() {
+    this.emit("close");
+  }
 }
 
-function makeRoom() {
+function makeRoom(options = {}) {
   const room = new ActivityRoom("validation", {
     engineBin: "",
     targetScore: 32,
-    readTimeoutMs: 1000
+    readTimeoutMs: 1000,
+    disconnectGraceMs: options.disconnectGraceMs ?? 1000
   });
   const sent = [];
+  const forfeits = [];
+  const response = new MockSseResponse();
   room.connect({
     user: { id: "player-1", name: "Player One", avatar: "" },
-    response: new MockSseResponse()
+    response
   });
   room.status = "playing";
   room.engine = {
     sendActions(seat, actions) {
       sent.push({ seat, actions });
+    },
+    forfeitSeat(seat) {
+      forfeits.push(seat);
+    },
+    stop() {
+      // Test double.
     }
   };
-  return { room, sent };
+  return { room, sent, forfeits, response };
 }
 
 function addPlayer(room, id, seat) {
@@ -57,6 +70,10 @@ function seedPlayingTrick(room, { hand, contract, trick = [], round = 1 }) {
 
 function seedSeats(room) {
   room.state.seats = { initiator: 1, nitwit: 2, cutter: 3, dealer: 4 };
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 test("Activity room rejects malformed buy actions before the engine", () => {
@@ -183,6 +200,34 @@ test("Activity room validates enforce calls before the engine", () => {
   assert.deepEqual(sent.at(-1).actions, [
     { actor_id: 1, type: "BUY_CALL", data: { call: "ENFORCE_HUKUM", trump: "S" } }
   ]);
+});
+
+test("Activity room forfeits disconnected in-match players after grace", async () => {
+  const { room, response, forfeits } = makeRoom({ disconnectGraceMs: 0 });
+
+  response.end();
+
+  assert.equal(room.participants.get("player-1").connected, false);
+  assert.deepEqual(forfeits, [1]);
+  assert.match(room.state.log.join("\n"), /forfeited after disconnect/);
+});
+
+test("Activity room cancels disconnect forfeit when a player reconnects", async () => {
+  const { room, response, forfeits } = makeRoom({ disconnectGraceMs: 25 });
+
+  response.end();
+  assert.equal(room.participants.get("player-1").connected, false);
+
+  room.connect({
+    user: { id: "player-1", name: "Player One", avatar: "" },
+    response: new MockSseResponse()
+  });
+  await sleep(50);
+
+  assert.equal(room.participants.get("player-1").connected, true);
+  assert.deepEqual(forfeits, []);
+  assert.match(room.state.log.join("\n"), /reconnected/);
+  room.close();
 });
 
 test("Activity room rejects illegal trick cards before the engine", () => {

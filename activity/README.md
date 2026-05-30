@@ -89,6 +89,10 @@ the public HTTPS URL, the session secret, or the C++ engine binary are missing.
   and `build/baloot-server` work from common launch locations.
 - `BALOOT_TARGET_SCORE`: target score passed to the engine, default `152`.
 - `BALOOT_READ_TIMEOUT_MS`: engine read timeout, default `900000`.
+- `ACTIVITY_DISCONNECT_GRACE_MS`: reconnect grace period for a seated player
+  during a match, default `10000`. If the player does not reconnect before the
+  grace expires, the Activity closes that player's engine proxy seat and the
+  engine resolves the match as a forfeit. No bot action is generated.
 - `ACTIVITY_ALLOW_INSECURE_DEV`: set `1` for mock local users.
   Set `0` in production; production sessions require `DISCORD_BOT_TOKEN`.
 
