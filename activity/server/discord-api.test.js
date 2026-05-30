@@ -1,0 +1,98 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+
+import { fetchDiscordApi } from "./discord-api.js";
+
+test("Discord API fetch retries 429s using Retry-After seconds", async () => {
+  const calls = [];
+  const delays = [];
+  const responses = [
+    new Response(JSON.stringify({ message: "rate limited", retry_after: 99 }), {
+      status: 429,
+      headers: { "Retry-After": "0.125", "Content-Type": "application/json" }
+    }),
+    new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "Content-Type": "application/json" } })
+  ];
+
+  const response = await fetchDiscordApi(
+    "https://discord.com/api/example",
+    { headers: { Authorization: "Bot token" } },
+    {
+      fetchFn: async (url, options) => {
+        calls.push({ url, options });
+        return responses.shift();
+      },
+      sleepFn: async (delay) => delays.push(delay),
+      maxRetryDelayMs: 1000
+    }
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(calls.length, 2);
+  assert.deepEqual(delays, [125]);
+  assert.equal(calls[0].url, "https://discord.com/api/example");
+  assert.equal(calls[0].options.headers.Authorization, "Bot token");
+});
+
+test("Discord API fetch falls back to retry_after JSON body", async () => {
+  const delays = [];
+  const responses = [
+    new Response(JSON.stringify({ retry_after: 0.25 }), {
+      status: 429,
+      headers: { "Content-Type": "application/json" }
+    }),
+    new Response("done", { status: 200 })
+  ];
+
+  const response = await fetchDiscordApi("https://discord.com/api/example", {}, {
+    fetchFn: async () => responses.shift(),
+    sleepFn: async (delay) => delays.push(delay),
+    maxRetryDelayMs: 1000
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(delays, [250]);
+});
+
+test("Discord API fetch does not retry earlier than the allowed delay", async () => {
+  const delays = [];
+  let calls = 0;
+
+  const response = await fetchDiscordApi("https://discord.com/api/example", {}, {
+    fetchFn: async () => {
+      calls += 1;
+      return new Response(JSON.stringify({ retry_after: 60 }), {
+        status: 429,
+        headers: { "Content-Type": "application/json" }
+      });
+    },
+    sleepFn: async (delay) => delays.push(delay),
+    maxRetries: 2,
+    maxRetryDelayMs: 500
+  });
+
+  assert.equal(response.status, 429);
+  assert.equal(calls, 1);
+  assert.deepEqual(delays, []);
+});
+
+test("Discord API fetch stops after max retries", async () => {
+  const delays = [];
+  let calls = 0;
+
+  const response = await fetchDiscordApi("https://discord.com/api/example", {}, {
+    fetchFn: async () => {
+      calls += 1;
+      return new Response(JSON.stringify({ retry_after: 0.01 }), {
+        status: 429,
+        headers: { "Content-Type": "application/json" }
+      });
+    },
+    sleepFn: async (delay) => delays.push(delay),
+    maxRetries: 2
+  });
+
+  assert.equal(response.status, 429);
+  assert.equal(calls, 3);
+  assert.deepEqual(delays, [10, 10]);
+});

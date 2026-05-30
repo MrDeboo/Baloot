@@ -106,6 +106,9 @@ are missing.
 - When proxy request signatures are enabled, signed Discord proxy user context is
   bound to the Activity session user for `/api/token`, `/api/events`, and
   `/api/action`.
+- Backend calls to Discord's OAuth, user, and Activity Instance APIs retry HTTP
+  429 responses using Discord's `Retry-After`, `X-RateLimit-Reset-After`, or
+  `retry_after` values before surfacing a failure.
 - Non-HTML Activity assets are served with `Cache-Control: no-store` so Discord
   clients do not hold stale JavaScript or CSS after a deploy.
 

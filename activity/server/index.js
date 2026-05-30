@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { signSession, verifyDiscordProxyRequestHeaders, verifySession } from "./auth.js";
+import { fetchDiscordApi } from "./discord-api.js";
 import { ActivityHub } from "./room.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -71,7 +72,7 @@ async function verifyActivityInstance({ userId, instanceId }) {
     return { verified: false, skipped: false, reason: "missing client id or instance id" };
   }
 
-  const response = await fetch(
+  const response = await fetchDiscordApi(
     `https://discord.com/api/applications/${clientId}/activity-instances/${instanceId}`,
     { headers: { Authorization: `Bot ${discordBotToken}` } }
   );
@@ -93,7 +94,7 @@ async function exchangeDiscordToken(code) {
     throw new Error("DISCORD_CLIENT_ID and DISCORD_CLIENT_SECRET are required for Discord auth.");
   }
 
-  const tokenResponse = await fetch("https://discord.com/api/oauth2/token", {
+  const tokenResponse = await fetchDiscordApi("https://discord.com/api/oauth2/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -108,7 +109,7 @@ async function exchangeDiscordToken(code) {
   }
   const token = await tokenResponse.json();
 
-  const userResponse = await fetch("https://discord.com/api/users/@me", {
+  const userResponse = await fetchDiscordApi("https://discord.com/api/users/@me", {
     headers: { Authorization: `${token.token_type} ${token.access_token}` }
   });
   if (!userResponse.ok) {
