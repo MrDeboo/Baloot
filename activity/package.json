@@ -10,6 +10,7 @@
     "preflight": "node server/preflight.js",
     "verify:entrypoint": "node server/entrypoint-command.js",
     "verify:deploy": "node server/deploy-check.js",
+    "verify:ready": "node server/readiness.js",
     "test": "node --test server/*.test.js"
   },
   "engines": {

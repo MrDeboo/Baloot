@@ -72,6 +72,14 @@ not need an extra external CDN URL mapping for the SDK import.
    node server/entrypoint-command.js --create
    ```
 
+8. Run the combined readiness gate before handing the Activity to testers. This
+   runs the config preflight, checks the public mapped URL, and verifies the
+   global Entry Point command:
+
+   ```sh
+   node server/readiness.js
+   ```
+
 Local development can run without Discord OAuth by leaving
 `ACTIVITY_ALLOW_INSECURE_DEV=1` and opening:
 
@@ -173,9 +181,12 @@ are missing.
 - `node server/deploy-check.js --url <public-url>`: checks the served Activity
   HTML, static assets, SDK bundle, API health, canonical `/api/*` routes, cache
   headers, and production config flags for a deployed URL.
+- `node server/readiness.js`: combines preflight, deployed URL verification, and
+  Entry Point verification. Use `--create-entrypoint` only when you want the
+  command to create a missing Entry Point command through Discord's API.
 - `node server/start.js`: loads `activity/.env` if it exists and starts the backend.
 - `node --test server/*.test.js`: runs the Activity server tests.
 
 The same commands are also exposed as npm scripts (`npm run dev`,
 `npm run preflight`, `npm run verify:entrypoint`, `npm run verify:deploy`,
-`npm start`, `npm test`) when npm is available.
+`npm run verify:ready`, `npm start`, `npm test`) when npm is available.

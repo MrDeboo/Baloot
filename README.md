@@ -210,7 +210,9 @@ mapping is live, run `node server/deploy-check.js --url "$ACTIVITY_PUBLIC_URL"`
 to verify the served Activity HTML, cache-busted JS/CSS, SDK asset, API health,
 and production config flags. Production sessions verify Discord Activity
 instance membership before users can join a room. See `activity/README.md` for
-details.
+details. Run `node server/readiness.js` from `activity/` when the public URL is
+live to combine the local config, deployed URL, and Entry Point checks in one
+gate.
 
 ## Platform Notes
 
