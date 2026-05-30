@@ -8,6 +8,7 @@
     "start": "node server/start.js",
     "dev": "node server/dev.js",
     "preflight": "node server/preflight.js",
+    "verify:entrypoint": "node server/entrypoint-command.js",
     "verify:deploy": "node server/deploy-check.js",
     "test": "node --test server/*.test.js"
   },

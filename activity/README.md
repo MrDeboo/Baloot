@@ -58,6 +58,20 @@ not need an extra external CDN URL mapping for the SDK import.
    node server/deploy-check.js --url "$ACTIVITY_PUBLIC_URL" --allow-signed-api
    ```
 
+7. Verify that the app has a global Entry Point command that Discord can use to
+   launch the Activity from the App Launcher:
+
+   ```sh
+   node server/entrypoint-command.js
+   ```
+
+   If Activities were enabled but the default Entry Point command is missing,
+   create one with Discord's `DISCORD_LAUNCH_ACTIVITY` handler:
+
+   ```sh
+   node server/entrypoint-command.js --create
+   ```
+
 Local development can run without Discord OAuth by leaving
 `ACTIVITY_ALLOW_INSECURE_DEV=1` and opening:
 
@@ -153,6 +167,9 @@ are missing.
   users, and starts the Activity backend.
 - `node server/preflight.js`: loads `activity/.env` if it exists and validates the
   Discord/engine configuration without starting a server.
+- `node server/entrypoint-command.js`: verifies the global Discord Entry Point
+  command used by the App Launcher. Add `--create` to create a missing
+  `PRIMARY_ENTRY_POINT` command with Discord's launch handler.
 - `node server/deploy-check.js --url <public-url>`: checks the served Activity
   HTML, static assets, SDK bundle, API health, canonical `/api/*` routes, cache
   headers, and production config flags for a deployed URL.
@@ -160,5 +177,5 @@ are missing.
 - `node --test server/*.test.js`: runs the Activity server tests.
 
 The same commands are also exposed as npm scripts (`npm run dev`,
-`npm run preflight`, `npm run verify:deploy`, `npm start`, `npm test`) when npm
-is available.
+`npm run preflight`, `npm run verify:entrypoint`, `npm run verify:deploy`,
+`npm start`, `npm test`) when npm is available.
