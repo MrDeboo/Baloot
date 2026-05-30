@@ -48,6 +48,28 @@ test("readiness combines config, deployment, and Entry Point checks", async () =
   assert.equal(calls[1].options.clientId, "app-1");
 });
 
+test("readiness does not pass blank Discord API base overrides", async () => {
+  const calls = [];
+  const report = await verifyActivityReadiness(
+    { ...validEnv, DISCORD_API_BASE_URL: "" },
+    {
+      validateConfig: () => validConfig,
+      verifyDeployment: async () => ({ ok: true, checks: [], errors: [], warnings: [] }),
+      verifyEntrypoint: async (options) => {
+        calls.push(options);
+        return {
+          ok: true,
+          reason: "Entry Point command launches the Activity through Discord.",
+          command: { id: "cmd-1" }
+        };
+      }
+    }
+  );
+
+  assert.equal(report.ok, true);
+  assert.equal(calls[0].apiBase, undefined);
+});
+
 test("readiness fails closed when deployment URL and Entry Point credentials are missing", async () => {
   const report = await verifyActivityReadiness(
     {},

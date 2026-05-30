@@ -53,6 +53,24 @@ test("Entry Point command creation sends the launch command payload", async () =
   });
 });
 
+test("Entry Point command reads from Discord v10 when apiBase is blank", async () => {
+  const calls = [];
+  const commands = await verifyEntryPointCommand({
+    clientId: "app-1",
+    botToken: "bot-token",
+    apiBase: "",
+    fetchFn: async (url, options) => {
+      calls.push({ url, options });
+      return new Response(JSON.stringify([
+        { id: "cmd-1", name: "launch", type: 4, handler: 2 }
+      ]), { status: 200 });
+    }
+  });
+
+  assert.equal(commands.ok, true);
+  assert.equal(calls[0].url, "https://discord.com/api/v10/applications/app-1/commands");
+});
+
 test("Entry Point verifier can create a missing command when requested", async () => {
   const calls = [];
   const report = await verifyEntryPointCommand({

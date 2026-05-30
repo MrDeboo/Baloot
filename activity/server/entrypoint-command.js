@@ -10,6 +10,10 @@ function discordApiBase(env = process.env) {
   return env.DISCORD_API_BASE_URL || "https://discord.com/api/v10";
 }
 
+function normalizeApiBase(value) {
+  return value || discordApiBase();
+}
+
 function botHeaders(botToken) {
   return { Authorization: `Bot ${botToken}` };
 }
@@ -39,8 +43,9 @@ function summarizeCommand(command) {
 }
 
 export async function getGlobalCommands({ clientId, botToken, fetchFn, apiBase = discordApiBase() }) {
+  const baseUrl = normalizeApiBase(apiBase);
   const response = await fetchDiscordApi(
-    `${apiBase}/applications/${clientId}/commands`,
+    `${baseUrl}/applications/${clientId}/commands`,
     { headers: botHeaders(botToken) },
     { fetchFn }
   );
@@ -87,8 +92,9 @@ export async function createEntryPointCommand({
   name = "launch",
   description = "Launch Baloot"
 }) {
+  const baseUrl = normalizeApiBase(apiBase);
   const response = await fetchDiscordApi(
-    `${apiBase}/applications/${clientId}/commands`,
+    `${baseUrl}/applications/${clientId}/commands`,
     {
       method: "POST",
       headers: { ...botHeaders(botToken), "Content-Type": "application/json" },

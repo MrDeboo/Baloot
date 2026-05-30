@@ -88,7 +88,7 @@ export async function verifyActivityReadiness(env = process.env, options = {}) {
         const entrypoint = await verifyEntrypoint({
           clientId: env.DISCORD_CLIENT_ID,
           botToken: env.DISCORD_BOT_TOKEN,
-          apiBase: env.DISCORD_API_BASE_URL,
+          apiBase: env.DISCORD_API_BASE_URL || undefined,
           createIfMissing: Boolean(options.createEntrypoint),
           name: options.entrypointName ?? "launch",
           description: options.entrypointDescription ?? "Launch Baloot"
