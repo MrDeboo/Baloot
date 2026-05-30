@@ -269,6 +269,53 @@ test("Activity retries start verification if the seated lobby roster changes", a
   }
 });
 
+test("Connected lobby spectators fill seats that open before Activity start", async () => {
+  let resolveVerification = null;
+  const firstVerification = new Promise((resolve) => {
+    resolveVerification = resolve;
+  });
+  const verifierCalls = [];
+  const hub = new ActivityHub({
+    engineBin: "/missing-baloot-server",
+    verifyPlayersReady: async (details) => {
+      verifierCalls.push(details);
+      if (verifierCalls.length === 1) return firstVerification;
+      return { verified: false, reason: "promotion observed" };
+    }
+  });
+  const room = hub.getRoom(`spectator-promote-${Date.now()}`);
+
+  try {
+    const p1 = connect(room, "player-1");
+    const p2 = connect(room, "player-2");
+    const p3 = connect(room, "player-3");
+    const p4 = connect(room, "player-4");
+    await waitFor(() => verifierCalls.length === 1);
+
+    const spectator = connect(room, "spectator-1");
+    assert.equal(latest(spectator).self.role, "spectator");
+
+    p1.end();
+    const promoted = await waitFor(() => latest(spectator)?.self.role === "player" && latest(spectator));
+    assert.equal(promoted.self.seat, 4);
+    assert.deepEqual(
+      promoted.players.map((player) => player.id),
+      ["player-2", "player-3", "player-4", "spectator-1"]
+    );
+
+    resolveVerification({ verified: true, reason: "old roster verified" });
+    const retryError = await waitFor(() => latest(spectator)?.status === "error" && latest(spectator));
+
+    assert.equal(room.engine, null);
+    assert.match(retryError.error, /promotion observed/);
+    assert.deepEqual(verifierCalls[0].userIds, ["player-1", "player-2", "player-3", "player-4"]);
+    assert.deepEqual(verifierCalls[1].userIds, ["player-2", "player-3", "player-4", "spectator-1"]);
+  } finally {
+    resolveVerification?.({ verified: true });
+    hub.closeAll();
+  }
+});
+
 test("Activity can complete a real-engine match from four player-submitted actions", { skip: !engineBin }, async () => {
   const hub = new ActivityHub({ engineBin, targetScore: 1, readTimeoutMs: 900000 });
   const room = hub.getRoom(`full-match-${Date.now()}`);

@@ -458,6 +458,23 @@ export class ActivityRoom extends EventEmitter {
       this.playersBySeat.set(participant.seat, participant.user.id);
       this.state.hands.set(participant.seat, []);
     });
+    this.promoteLobbySpectators();
+  }
+
+  promoteLobbySpectators() {
+    if (this.status !== "lobby") return;
+    const players = this.connectedPlayers();
+    if (players.length >= 4) return;
+
+    for (const participant of this.participants.values()) {
+      if (players.length >= 4) break;
+      if (participant.role !== "spectator" || !participant.connected) continue;
+      participant.role = "player";
+      participant.seat = players.length + 1;
+      this.playersBySeat.set(participant.seat, participant.user.id);
+      this.state.hands.set(participant.seat, []);
+      players.push(participant);
+    }
   }
 
   submitAction(userId, body) {
