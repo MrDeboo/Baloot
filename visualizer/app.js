@@ -89,6 +89,13 @@ round 8 winner 3 points 22
 game 2 score A=16 B=10 total A=30 B=22
 MATCH_END A=30 B=22 winner=A`;
 
+const SUIT_SYMBOLS = {
+  S: "♠",
+  H: "♥",
+  D: "♦",
+  C: "♣"
+};
+
 const els = {
   logInput: document.querySelector("#logInput"),
   loadLog: document.querySelector("#loadLog"),
@@ -395,6 +402,10 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
+function suitSymbol(suit) {
+  return SUIT_SYMBOLS[suit] ?? suit;
+}
+
 function cardMarkup(card, small = false) {
   if (!card) {
     return `<div class="card card-ghost ${small ? "card-small" : ""}">--</div>`;
@@ -403,7 +414,7 @@ function cardMarkup(card, small = false) {
   const sizeClass = small ? "card-small" : "";
   return `<div class="card ${colorClass} ${sizeClass}" aria-label="${escapeHtml(card.code)}">
     <span class="card-rank">${escapeHtml(card.rank)}</span>
-    <span class="card-suit">${escapeHtml(card.suit)}</span>
+    <span class="card-suit">${escapeHtml(suitSymbol(card.suit))}</span>
     <span class="card-foot">${escapeHtml(card.rank)}</span>
   </div>`;
 }

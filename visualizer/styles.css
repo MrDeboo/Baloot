@@ -164,6 +164,7 @@ h1 {
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(250px, 320px) minmax(520px, 1fr) minmax(280px, 360px);
+  align-items: start;
   gap: 18px;
   padding: 18px;
   flex: 1;
@@ -171,6 +172,8 @@ h1 {
 
 .panel,
 .replay-stage {
+  width: 100%;
+  align-self: start;
   border: 1px solid rgba(34, 31, 26, 0.12);
   border-radius: 8px;
   background: rgba(255, 252, 245, 0.92);
@@ -212,8 +215,9 @@ h2 {
 
 .log-panel textarea {
   width: 100%;
+  height: clamp(320px, 48vh, 620px);
   min-height: 360px;
-  flex: 1;
+  flex: 0 0 auto;
   resize: none;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -483,21 +487,23 @@ h2 {
   gap: 6px;
 }
 
-.played-stack span {
+.played-stack > span {
   color: rgba(255, 250, 240, 0.76);
   font-size: 0.74rem;
   font-weight: 800;
 }
 
 .card {
+  --card-suit: var(--black-card);
   width: 54px;
   aspect-ratio: 0.72;
   display: grid;
   grid-template-rows: auto 1fr auto;
   padding: 6px;
+  border: 1px solid rgba(34, 31, 26, 0.16);
   border-radius: 8px;
   color: var(--black-card);
-  background: #fffaf0;
+  background: linear-gradient(160deg, #fffef8, #f4e6d1);
   box-shadow: 0 7px 18px rgba(0, 0, 0, 0.22);
   font-weight: 900;
 }
@@ -509,10 +515,12 @@ h2 {
 }
 
 .card-red {
-  color: var(--red);
+  --card-suit: #c4292f;
+  color: var(--black-card);
 }
 
 .card-rank {
+  color: var(--black-card);
   font-size: 0.9rem;
   line-height: 1;
 }
@@ -520,7 +528,9 @@ h2 {
 .card-suit {
   align-self: center;
   justify-self: center;
-  font-size: 1rem;
+  color: var(--card-suit);
+  font-size: 1.18rem;
+  line-height: 1;
 }
 
 .card-small .card-rank,
@@ -531,6 +541,7 @@ h2 {
 .card-foot {
   justify-self: end;
   transform: rotate(180deg);
+  color: var(--black-card);
   font-size: 0.8rem;
 }
 
@@ -585,6 +596,7 @@ h2 {
 }
 
 .timeline-panel {
+  max-height: calc(100vh - 112px);
   overflow: hidden;
 }
 
@@ -646,6 +658,8 @@ h2 {
 
 .event-list {
   min-height: 0;
+  max-height: clamp(260px, 58vh, 620px);
+  flex: 1 1 auto;
   overflow: auto;
   display: grid;
   gap: 6px;
