@@ -174,6 +174,9 @@ test("Activity client serves the vendored Discord SDK without external CDN impor
   const main = await fs.readFile(path.join(repoRoot, "activity/client/main.js"), "utf8");
   assert.doesNotMatch(main, /https:\/\/esm\.sh|https:\/\/cdn|unpkg\.com|jsdelivr\.net/);
   assert.match(main, /vendor\/discord-embedded-app-sdk\/output\/index\.mjs/);
+  assert.match(main, /\bEvents\b/);
+  assert.match(main, /getInstanceConnectedParticipants/);
+  assert.match(main, /ACTIVITY_INSTANCE_PARTICIPANTS_UPDATE/);
 
   const port = await reservePort();
   const server = spawn(process.execPath, ["activity/server/index.js"], {

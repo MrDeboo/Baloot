@@ -35,8 +35,11 @@ const BUY_OPTIONS_BY_PHASE = {
 const els = {
   roomStatus: document.querySelector("#roomStatus"),
   selfBadge: document.querySelector("#selfBadge"),
+  lobbyStrip: document.querySelector("#lobbyStrip"),
   playerList: document.querySelector("#playerList"),
   spectatorList: document.querySelector("#spectatorList"),
+  activityUsersPanel: document.querySelector("#activityUsersPanel"),
+  activityUserList: document.querySelector("#activityUserList"),
   seats: {
     initiator: document.querySelector("#seatBottom"),
     nitwit: document.querySelector("#seatLeft"),
@@ -70,7 +73,10 @@ let eventSource = null;
 let snapshot = null;
 let selectedCard = "";
 let discordSdk = null;
+let discordEvents = null;
 let apiPrefix = "";
+let activityParticipants = [];
+let activityParticipantsReady = false;
 
 function cardColor(card) {
   return card.endsWith("H") || card.endsWith("D") ? "red" : "black";
@@ -136,7 +142,8 @@ async function authenticate() {
     throw new Error("Discord client id is missing and local mock mode is disabled.");
   }
 
-  const { DiscordSDK } = await import("./vendor/discord-embedded-app-sdk/output/index.mjs");
+  const { DiscordSDK, Events } = await import("./vendor/discord-embedded-app-sdk/output/index.mjs");
+  discordEvents = Events;
   discordSdk = new DiscordSDK(config.clientId);
   await discordSdk.ready();
   roomId = discordSdk.instanceId || roomId;
@@ -162,6 +169,7 @@ async function authenticate() {
   await discordSdk.commands.authenticate({ access_token: token.access_token });
   user = token.user;
   session = token.session;
+  syncActivityParticipants();
   setStatus("Discord Activity connected");
 }
 
@@ -185,6 +193,92 @@ function renderPeople(container, people, emptyText) {
         })
         .join("")
     : `<span class="avatar-chip">${escapeHtml(emptyText)}</span>`;
+}
+
+function activityDisplayName(participant) {
+  return (
+    participant.nickname ||
+    participant.global_name ||
+    participant.username ||
+    (participant.id ? `User ${participant.id}` : "Discord user")
+  );
+}
+
+function normalizeActivityParticipant(participant) {
+  return {
+    id: String(participant.id ?? ""),
+    name: activityDisplayName(participant),
+    avatar: participant.avatar || ""
+  };
+}
+
+function updateActivityParticipants(payload) {
+  const participants = Array.isArray(payload?.participants) ? payload.participants : [];
+  activityParticipants = participants
+    .map(normalizeActivityParticipant)
+    .filter((participant) => participant.id);
+  activityParticipantsReady = true;
+  renderActivityUsers();
+}
+
+async function syncActivityParticipants() {
+  if (!discordSdk || !discordEvents) return;
+
+  const getParticipants =
+    discordSdk.commands.getInstanceConnectedParticipants ||
+    discordSdk.commands.getActivityInstanceConnectedParticipants;
+  if (getParticipants) {
+    try {
+      updateActivityParticipants(await getParticipants());
+    } catch (error) {
+      console.warn("Could not fetch Activity participants.", error);
+    }
+  }
+
+  try {
+    await discordSdk.subscribe(
+      discordEvents.ACTIVITY_INSTANCE_PARTICIPANTS_UPDATE,
+      updateActivityParticipants
+    );
+  } catch (error) {
+    console.warn("Could not subscribe to Activity participant updates.", error);
+  }
+}
+
+function knownGamePeopleById() {
+  return new Map(
+    [...(snapshot?.players ?? []), ...(snapshot?.spectators ?? [])].map((person) => [person.id, person])
+  );
+}
+
+function renderActivityUsers() {
+  const show = activityParticipantsReady && activityParticipants.length > 0;
+  els.lobbyStrip.classList.toggle("has-activity-users", show);
+  els.activityUsersPanel.classList.toggle("hidden", !show);
+
+  if (!show) {
+    els.activityUserList.innerHTML = "";
+    return;
+  }
+
+  const peopleById = knownGamePeopleById();
+  els.activityUserList.innerHTML = activityParticipants
+    .map((person) => {
+      const gamePerson = peopleById.get(person.id);
+      const label = gamePerson?.seat ? `P${gamePerson.seat}` : person.name.slice(0, 1).toUpperCase() || "?";
+      const detail =
+        gamePerson?.role === "player"
+          ? `Player ${gamePerson.seat}`
+          : gamePerson?.role === "spectator"
+            ? "Spectator"
+            : "Joining";
+      return `<div class="avatar-chip">
+        <span class="avatar-dot">${escapeHtml(label)}</span>
+        <span class="avatar-name">${escapeHtml(person.name)}</span>
+        <span class="avatar-detail">${escapeHtml(detail)}</span>
+      </div>`;
+    })
+    .join("");
 }
 
 function renderSeats() {
@@ -319,6 +413,7 @@ function render() {
     : "Spectator";
   renderPeople(els.playerList, snapshot.players, "No players yet");
   renderPeople(els.spectatorList, snapshot.spectators, "No spectators");
+  renderActivityUsers();
   renderSeats();
   if (
     selectedCard &&

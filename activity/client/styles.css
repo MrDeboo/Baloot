@@ -103,6 +103,14 @@ h2 {
   padding: 12px;
 }
 
+.lobby-strip.has-activity-users {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.lobby-strip > div {
+  min-width: 0;
+}
+
 .avatar-list {
   min-height: 44px;
   display: flex;
@@ -112,6 +120,8 @@ h2 {
 }
 
 .avatar-chip {
+  min-width: 0;
+  max-width: 100%;
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -121,6 +131,20 @@ h2 {
   background: #fffaf0;
   font-size: 0.82rem;
   font-weight: 800;
+}
+
+.avatar-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.avatar-detail {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
 .avatar-dot {
@@ -374,6 +398,11 @@ input[type="text"] {
     grid-template-rows: auto minmax(150px, 1fr) auto;
     gap: 8px;
     padding: 8px;
+  }
+
+  .lobby-strip,
+  .lobby-strip.has-activity-users {
+    grid-template-columns: 1fr;
   }
 
   .table::before {

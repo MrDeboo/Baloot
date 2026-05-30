@@ -101,6 +101,10 @@ are missing.
   compatibility with existing local tests and older deployments.
 - The Embedded App SDK is loaded from the Activity's own static assets rather
   than from an external CDN.
+- The Activity client uses the SDK `instanceId` as the room key and subscribes
+  to Discord Activity instance participant updates so the lobby can show the
+  Discord users currently inside the same Activity instance alongside the
+  backend-seated players and spectators.
 - In production mode, `/api/token` verifies the authenticated user is present in
   the Discord Activity instance before issuing an Activity session.
 - When proxy request signatures are enabled, signed Discord proxy user context is
