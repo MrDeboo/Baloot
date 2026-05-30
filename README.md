@@ -383,3 +383,14 @@ future completion in the caller.
 - Concurrent lobby matches.
 - Disconnect forfeit.
 - Malformed client isolation while another match completes normally.
+
+Activity-specific tests can be run with:
+
+```sh
+node --test activity/server/*.test.js
+```
+
+Those tests include a real-engine smoke check for the Discord Activity bridge:
+three connected users stay in the lobby, the fourth starts the C++ engine, a
+fifth user becomes a spectator, and a submitted player bid advances the engine
+turn.

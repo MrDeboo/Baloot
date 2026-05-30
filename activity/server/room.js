@@ -70,6 +70,13 @@ export class ActivityHub {
     }
     return this.rooms.get(id);
   }
+
+  closeAll() {
+    for (const room of this.rooms.values()) {
+      room.close();
+    }
+    this.rooms.clear();
+  }
 }
 
 export class ActivityRoom extends EventEmitter {
@@ -370,6 +377,14 @@ export class ActivityRoom extends EventEmitter {
       }
     };
   }
+
+  close() {
+    for (const client of this.clients) {
+      client.response.end?.();
+    }
+    this.clients.clear();
+    this.engine?.stop();
+  }
 }
 
 class EngineMatch {
@@ -504,5 +519,15 @@ class EngineMatch {
     const connection = this.seats.get(seat);
     if (!connection) throw new Error("Engine seat is not connected.");
     connection.sendActions(actions);
+  }
+
+  stop() {
+    for (const connection of this.seats.values()) {
+      connection.close();
+    }
+    this.seats.clear();
+    if (this.process && !this.process.killed) {
+      this.process.kill();
+    }
   }
 }
