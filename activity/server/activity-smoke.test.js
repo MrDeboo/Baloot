@@ -200,6 +200,49 @@ test("Activity start is gated by the Discord instance participant verifier", asy
   }
 });
 
+test("Activity retries start verification if the seated lobby roster changes", async () => {
+  const verifierCalls = [];
+  let resolveFirstVerification = null;
+  const firstVerification = new Promise((resolve) => {
+    resolveFirstVerification = resolve;
+  });
+  const hub = new ActivityHub({
+    engineBin: "/missing-baloot-server",
+    verifyPlayersReady: async (details) => {
+      verifierCalls.push(details);
+      if (verifierCalls.length === 1) return firstVerification;
+      return { verified: false, reason: "retry observed" };
+    }
+  });
+  const room = hub.getRoom(`roster-retry-${Date.now()}`);
+
+  try {
+    const p1 = connect(room, "player-1");
+    const p2 = connect(room, "player-2");
+    const p3 = connect(room, "player-3");
+    const p4 = connect(room, "player-4");
+    await waitFor(() => verifierCalls.length === 1);
+
+    p1.end();
+    await waitFor(() => latest(p2)?.players.length === 3);
+    const p5 = connect(room, "player-5");
+    assert.equal(latest(p5).self.role, "player");
+    assert.equal(latest(p5).self.seat, 4);
+
+    resolveFirstVerification({ verified: true, reason: "old roster verified" });
+    const retryError = await waitFor(() => latest(p2)?.status === "error" && latest(p2));
+
+    assert.equal(room.engine, null);
+    assert.match(retryError.error, /retry observed/);
+    assert.equal(verifierCalls.length, 2);
+    assert.deepEqual(verifierCalls[0].userIds, ["player-1", "player-2", "player-3", "player-4"]);
+    assert.deepEqual(verifierCalls[1].userIds, ["player-2", "player-3", "player-4", "player-5"]);
+  } finally {
+    resolveFirstVerification?.({ verified: true });
+    hub.closeAll();
+  }
+});
+
 test("Activity can complete a real-engine match from four player-submitted actions", { skip: !engineBin }, async () => {
   const hub = new ActivityHub({ engineBin, targetScore: 1, readTimeoutMs: 900000 });
   const room = hub.getRoom(`full-match-${Date.now()}`);

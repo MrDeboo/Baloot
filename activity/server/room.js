@@ -354,7 +354,7 @@ export class ActivityRoom extends EventEmitter {
   maybeStart() {
     this.pruneLobbyDisconnects();
     const seatedPlayers = this.connectedPlayers();
-    if (this.status !== "lobby" || seatedPlayers.length !== 4 || this.startPromise) return;
+    if (this.closed || this.status !== "lobby" || seatedPlayers.length !== 4 || this.startPromise) return;
     this.startPromise = this.startMatch(seatedPlayers)
       .catch((error) => {
         this.status = "error";
@@ -363,6 +363,9 @@ export class ActivityRoom extends EventEmitter {
       })
       .finally(() => {
         this.startPromise = null;
+        if (!this.closed && this.status === "lobby" && this.connectedPlayers().length === 4) {
+          this.maybeStart();
+        }
       });
   }
 
